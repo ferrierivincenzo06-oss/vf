@@ -27,7 +27,7 @@
                         fill?:true (giorno "riempito" di azzurro nel calendario, es. giorni fuori casa) }
   weeks/<lunedì YYYY-MM-DD> { done:[chiave "giorno|testo" o "fix|testo"] }
   tasks/<id>  { text, cat, scope:'week'|'list', done, doneAt, createdAt, week?, fromId? (copia in settimana di un impegno 'list') }
-  pages/mete  { period, items:[{id,text,done}], character:[testo] }
+  pages/mete  { period, items:[{id,text,done,group?}] (group = titolo sezione, es. Professionale/Privata), character:[testo], characterTitle? }
   pages/soldi { monthly:[{id,text}], checks:{ "YYYY-MM":[id] }, body, hours:[{id,date:'YYYY-MM-DD',h:numero,note?}], rate,
                 banner, dispo:[{id,emoji,title,cifra?|parts?:[{label,val}],uso,dove,fonte,upd}] }
   pages/fisico { body }   pages/alimentazione { body }
@@ -830,9 +830,10 @@ function renderMete(force){
   const p = page('mete'); const items = p.items || [];
   let h = '<div class="mete'+(S.meteAnim?' anim':'')+'"><button class="ibtn close" data-a="closeMete" aria-label="Chiudi">'+I.x+'</button><div class="mete-in"><h1>Mete</h1> <span style="font-size:34px">🎯</span><div class="per">'+esc(p.period || '')+'</div>';
   h += '<div class="card">'+progress(items.filter(x => x.done).length, items.length);
-  items.forEach(x => { h += chkRow(x.done, 'data-a="meteChk" data-id="'+x.id+'"', x.text, '<button class="x" data-a="meteEdit" data-id="'+x.id+'" aria-label="Modifica">'+I.dots+'</button>'); });
+  let lastG = null;
+  items.forEach(x => { const g = x.group || ''; if (g !== lastG){ if (g) h += '<div class="grp-t" style="margin-top:'+(lastG === null ? '6px' : '18px')+'">'+esc(g)+'</div>'; lastG = g; } h += chkRow(x.done, 'data-a="meteChk" data-id="'+x.id+'"', x.text, '<button class="x" data-a="meteEdit" data-id="'+x.id+'" aria-label="Modifica">'+I.dots+'</button>'); });
   h += '<form class="add" data-f="meteAdd"><input name="t" placeholder="Nuova meta…" autocomplete="off" data-focus="meteAdd"><button aria-label="Aggiungi meta">'+I.plus+'</button></form></div>';
-  if ((p.character || []).length) h += '<div class="card"><h3>Obiettivi carattere</h3><ol>'+p.character.map(c => '<li>'+esc(c)+'</li>').join('')+'</ol></div>';
+  if ((p.character || []).length) h += '<div class="card"><h3>'+esc(p.characterTitle || 'Obiettivi carattere')+'</h3><ol>'+p.character.map(c => '<li>'+esc(c)+'</li>').join('')+'</ol></div>';
   h += '</div></div>';
   const wrap = el.firstElementChild;
   if (wrap && !force && isTyping(wrap)) return;

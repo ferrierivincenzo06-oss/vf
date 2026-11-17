@@ -622,7 +622,7 @@ function renderCalendar(){
     const col = st.frac >= 1 ? '#10B981' : '#0EA5C9';
     h += '<button class="day'+(out?' out':'')+(isT?' today':'')+((S.c.days[d] || {}).fill ? ' fill' : '')+'" data-a="openDay" data-d="'+d+'"><span class="rw">'+(showRing ? ring(st.frac, col, 40) : '')+'<span class="n">'+parseD(d).getDate()+'</span></span><span class="dots">'+(st.extras ? '<span class="dot"></span>' : '')+(st.note ? '<span class="dot nt"></span>' : '')+'</span></button>';
   }
-  h += '</div><div class="legend"><span><i style="background:var(--violet)"></i>Routine fatta</span><span><i style="background:var(--coral)"></i>Impegni extra</span><span><i style="background:#8B5CF6"></i>Note</span><span><i style="background:#0EA5C9;border-radius:3px"></i>Giorno riempito</span></div></div>';
+  h += '</div><div class="legend"><span><i style="background:var(--violet)"></i>Routine fatta</span><span><i style="background:var(--coral)"></i>Impegni extra</span><span><i style="background:#8B5CF6"></i>Note</span></div></div>';
   return h;
 }
 

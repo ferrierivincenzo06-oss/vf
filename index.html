@@ -1,0 +1,1379 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F1F8FA">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="VF">
+<title>VF</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<script src="config.js"></script>
+<script src="supabase.js"></script>
+<script src="vf-backend.js"></script>
+<!--
+  VF — gestionale personale.
+  Dati nel db dell'artifact (solo il proprietario legge/scrive):
+  config/main  { routine:{lun,mar,mer,gio,venerdi,weekend} (feriale = vecchio lun–gio, usato solo se manca il giorno) (testo: righe = voci, riga vuota = nuovo gruppo, "# Titolo" = titolo gruppo;
+                 in fondo a una voce: [lun mer ...] = solo quei giorni, [alterna A]/[alterna B] = settimane alterne),
+                 week (testo: "LUNEDÌ" ... "DOMENICA", "IMPEGNI FISSI" come intestazioni),
+                 cats:[{id,name,kind:'pers'|'proj'}], noteFolders:[{id,name}], lastBackup, lastCleanup }
+  days/<YYYY-MM-DD>   { done:[testo voce routine], hidden:[voci routine tolte solo quel giorno],
+                        extras:[{id,text,done, after?:testo voce routine dopo cui sta ('' = in cima); assente = in Altri impegni}] }
+  weeks/<lunedì YYYY-MM-DD> { done:[chiave "giorno|testo" o "fix|testo"] }
+  tasks/<id>  { text, cat, scope:'week'|'list', done, doneAt, createdAt, week?, fromId? (copia in settimana di un impegno 'list') }
+  pages/mete  { period, items:[{id,text,done}], character:[testo] }
+  pages/soldi { monthly:[{id,text}], checks:{ "YYYY-MM":[id] }, body, hours:[{id,date:'YYYY-MM-DD',h:numero,note?}], rate,
+                banner, dispo:[{id,emoji,title,cifra?|parts?:[{label,val}],uso,dove,fonte,upd}] }
+  pages/fisico { body }   pages/alimentazione { body }
+  notes/<id>  { folder, title, body, updatedAt }
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F1F8FA; --card:#FFFFFF; --ink:#13262E; --muted:#7A8D96; --line:#E1EEF2; --soft:#E6F5F8;
+  --violet:#0A9FC4; --pink:#13BFA6; --coral:#F59E0B; --mint:#10B981; --amber:#F5A524; --sky:#38BDF8;
+  --grad:linear-gradient(135deg,#38BDF8 0%,#0EA5C9 40%,#14C2A8 80%,#34D399 100%);
+  --st:env(safe-area-inset-top,0px); --sb:env(safe-area-inset-bottom,0px);
+  --r:18px; --shadow:0 6px 24px rgba(14,80,110,.08);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;font-size:15px}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;padding:0}
+input,textarea,select{font:inherit;color:inherit}
+.app{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+/* top bar */
+.top{flex:none;padding:calc(8px + var(--st)) 12px 8px;display:flex;align-items:center;gap:8px;background:rgba(241,248,250,.9);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);z-index:20}
+.ibtn{width:42px;height:42px;border-radius:14px;display:grid;place-items:center;background:var(--card);box-shadow:0 2px 10px rgba(14,80,110,.07);position:relative}
+.ibtn svg{width:22px;height:22px}
+.ibtn.on{background:var(--violet);color:#fff}
+.ibtn .badge{position:absolute;top:5px;right:5px;width:11px;height:11px;border-radius:50%;background:#10B981;border:2px solid #fff}
+.ibtn .badge.warn{background:#F97316;box-shadow:0 0 0 3px rgba(249,115,22,.25)}
+.logo{flex:1;text-align:center;font-weight:800;font-size:26px;letter-spacing:1px;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;user-select:none}
+.body{flex:1;display:flex;min-height:0;position:relative}
+.main{flex:1;min-width:0;overflow:auto;padding:4px 14px calc(96px + var(--sb))}
+body.bshow .main{padding-bottom:calc(140px + var(--sb))}
+/* banners */
+.banner{display:flex;align-items:center;gap:10px;background:var(--card);border-radius:16px;padding:10px 12px;margin:6px 0 8px;box-shadow:var(--shadow);font-size:13.5px}
+.banner .em{font-size:20px}
+.banner .tx{flex:1;line-height:1.3}
+.banner b{display:block;font-size:14px}
+.pill{border-radius:999px;padding:8px 14px;font-weight:700;font-size:13px;background:var(--violet);color:#fff;white-space:nowrap}
+.pill.ghost{background:var(--soft);color:var(--violet)}
+.pill.pink{background:var(--pink)}
+.pill.danger{background:#FFE9EC;color:#E11D48}
+/* calendar */
+.cal{background:var(--card);border-radius:24px;box-shadow:var(--shadow);padding:14px 10px 10px;display:flex;flex-direction:column;min-height:calc(100dvh - 190px)}
+.cal-h{display:flex;align-items:center;gap:6px;padding:0 4px 10px}
+.cal-h h2{flex:1;margin:0;font-size:21px;font-weight:800;text-transform:capitalize}
+.cal-h .ibtn{width:36px;height:36px;border-radius:12px;box-shadow:none;background:var(--soft)}
+.cal-h .today-b{font-size:12.5px;font-weight:700;color:var(--violet);background:var(--soft);padding:8px 12px;border-radius:12px}
+.wd{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-size:11.5px;font-weight:700;color:var(--muted);padding-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
+.grid{flex:1;display:grid;grid-template-columns:repeat(7,1fr);grid-auto-rows:minmax(58px,1fr);gap:4px}
+.day{border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;position:relative;transition:background .15s}
+.day:hover{background:var(--soft)}
+.day.out{opacity:.28}
+.day .rw{position:relative;width:40px;height:40px;display:grid;place-items:center}
+.day .rw svg{position:absolute;inset:0;transform:rotate(-90deg)}
+.day .n{font-weight:700;font-size:15px;position:relative}
+.day.today .rw{background:var(--grad);border-radius:50%;color:#fff}
+.day.today .rw svg circle.bg{stroke:rgba(255,255,255,.35)}
+.day.today .rw svg circle.fg{stroke:#fff}
+.day .dot{width:6px;height:6px;border-radius:50%;background:var(--coral)}
+.day .dot.none{background:transparent}
+.legend{display:flex;gap:14px;justify-content:center;font-size:11.5px;color:var(--muted);padding-top:10px}
+.legend span{display:flex;align-items:center;gap:5px}
+.legend i{width:8px;height:8px;border-radius:50%;display:inline-block}
+/* sidebar */
+.side{position:fixed;z-index:40;top:0;bottom:0;left:0;width:min(90vw,390px);background:var(--bg);box-shadow:8px 0 40px rgba(10,60,80,.18);transform:translateX(-105%);transition:transform .28s cubic-bezier(.2,.8,.2,1);display:flex;flex-direction:column;padding-top:var(--st)}
+.side.open{transform:none}
+.scrim{position:fixed;inset:0;background:rgba(10,40,55,.28);z-index:35;opacity:0;pointer-events:none;transition:opacity .25s}
+.scrim.show{opacity:1;pointer-events:auto}
+@media (min-width:980px){
+  .side{position:relative;transform:none;width:0;overflow:hidden;box-shadow:none;transition:width .28s;padding-top:0;border-right:1px solid var(--line)}
+  .side.open{width:390px}
+  .side .side-in{width:390px}
+  .scrim{display:none}
+}
+.side-in{display:flex;flex-direction:column;height:100%;min-height:0}
+.side-top{padding:12px 12px 8px;display:flex;align-items:center;gap:8px}
+.tabs{flex:1;display:flex;background:var(--card);border-radius:14px;padding:4px;box-shadow:0 2px 10px rgba(14,80,110,.06)}
+.tabs button{flex:1;padding:9px 4px;border-radius:10px;font-weight:700;font-size:13px;color:var(--muted)}
+.tabs button.on{background:var(--violet);color:#fff}
+.side-body{flex:1;overflow:auto;padding:4px 12px calc(30px + var(--sb))}
+.card{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);padding:14px;margin-bottom:12px}
+.card h3{margin:0 0 10px;font-size:15px;font-weight:800;display:flex;align-items:center;gap:8px}
+.card h3 .sub{font-weight:600;color:var(--muted);font-size:12.5px;margin-left:auto}
+.sec-t{font-size:11.5px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin:14px 2px 8px}
+.prog{height:8px;border-radius:99px;background:var(--soft);overflow:hidden;margin:2px 0 4px}
+.prog i{display:block;height:100%;background:var(--grad);border-radius:99px;transition:width .3s}
+.prog-l{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);font-weight:600}
+/* checklist */
+.chk{display:flex;align-items:flex-start;gap:10px;padding:7px 0}
+.chk + .chk{border-top:1px solid #EEF5F7}
+.box{flex:none;width:24px;height:24px;border-radius:50%;border:2px solid #C3D6DD;display:grid;place-items:center;transition:all .15s;margin-top:-1px}
+.box svg{width:14px;height:14px;opacity:0;color:#fff}
+.chk.done .box{background:var(--mint);border-color:var(--mint)}
+.chk.done .box svg{opacity:1}
+.chk .t{flex:1;line-height:1.35;padding-top:1px;word-break:break-word}
+.chk.done .t{text-decoration:line-through;color:#A6B8C0}
+.chk .act{flex:none;font-size:11.5px;font-weight:700;color:var(--violet);background:var(--soft);border-radius:10px;padding:5px 8px}
+.chk .act.wk{white-space:nowrap}
+.chk .act.wk.on{background:#E3F7EF;color:#0E9F6E}
+.chk .x{flex:none;width:26px;height:26px;border-radius:8px;display:grid;place-items:center;color:#A6B8C0}
+.chk .x svg{width:16px;height:16px}
+.chk .more{opacity:1}
+.chk.ext{background:#FFF6E8;border-radius:10px;padding-left:6px;padding-right:4px;margin:2px -6px}
+.chk[draggable="true"]{cursor:grab}
+.chk.drop-b{box-shadow:inset 0 3px 0 var(--violet)}
+.chk.drop-a{box-shadow:inset 0 -3px 0 var(--violet)}
+.dropzone.over{outline:2px dashed var(--violet);outline-offset:2px}
+.chk.dragging{opacity:.35}
+.chk[draggable="true"]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+body.tdrag{-webkit-user-select:none;user-select:none;overflow:hidden}
+.rtmenu{display:flex;gap:8px;flex-wrap:wrap;padding:2px 0 8px 34px}
+.rtmenu .pill{padding:7px 12px;font-size:12.5px}
+.grp + .grp{margin-top:6px;padding-top:6px;border-top:2px dashed var(--line)}
+.grp-t{font-size:12px;font-weight:800;color:var(--violet);text-transform:uppercase;letter-spacing:.6px;margin:4px 0 2px}
+.wday{padding:8px 10px;border-radius:14px;margin:0 -4px}
+.chk .alt{flex:none;font-size:10.5px;font-weight:700;color:var(--violet);background:var(--soft);border-radius:8px;padding:3px 7px;margin-top:2px}
+.wnav{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.wnav .ibtn{width:38px;height:38px;border-radius:12px;box-shadow:none;background:var(--soft)}
+.wnav-t{flex:1;text-align:center;line-height:1.25}
+.wnav-t b{display:block;font-size:16px;font-weight:800}
+.wnav-t span{font-size:12px;color:var(--muted);font-weight:600}
+.wday.today{background:#E3F5F9}
+.wday-n{font-weight:800;font-size:13px;display:flex;align-items:center;gap:8px}
+.wday-n .tg{font-size:10.5px;background:var(--violet);color:#fff;border-radius:6px;padding:2px 6px}
+.add{display:flex;gap:8px;margin-top:8px}
+.add input,.field{flex:1;min-width:0;border:1.5px solid var(--line);background:#F8FCFD;border-radius:12px;padding:10px 12px;outline:none}
+.add input:focus,.field:focus,textarea.field:focus{border-color:var(--violet);background:#fff}
+.add button{flex:none;width:42px;border-radius:12px;background:var(--violet);color:#fff;display:grid;place-items:center}
+.add button svg{width:20px;height:20px}
+/* categories */
+.cat{background:var(--card);border-radius:16px;box-shadow:0 2px 12px rgba(14,80,110,.06);margin-bottom:8px;overflow:hidden}
+.cat-h{display:flex;align-items:center;gap:12px;padding:10px 12px;width:100%;text-align:left}
+.cat-h .nm{flex:1;font-weight:700}
+.cat-h .pin{display:inline-flex;vertical-align:-2px;margin-left:7px;color:var(--violet)}
+.cat-h .pin svg{width:15px;height:15px;transform:rotate(-15deg)}
+.cat-h .ct{font-size:12px;color:var(--muted);font-weight:600}
+.cat-h .chev{width:18px;height:18px;color:#A6B8C0;transition:transform .2s}
+.cat.open .chev{transform:rotate(90deg)}
+.cat-b{padding:0 12px 12px}
+.cat.zero .cat-h .nm{color:var(--muted)}
+.ring{flex:none;position:relative;width:38px;height:38px;display:grid;place-items:center}
+.ring svg{position:absolute;inset:0;transform:rotate(-90deg)}
+.ring b{font-size:12px;font-weight:800;position:relative}
+.mini{font-size:12.5px;font-weight:700;color:var(--violet)}
+.row-btns{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px}
+/* bottom nav */
+.bnav{position:fixed;left:0;right:0;bottom:0;z-index:30;padding:6px 6px calc(6px + var(--sb));display:flex;justify-content:center;transform:translateY(120%);transition:transform .28s cubic-bezier(.2,.8,.2,1);pointer-events:none}
+.bnav.show{transform:none}
+.bnav-in{pointer-events:auto;display:flex;gap:2px;background:rgba(255,255,255,.96);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-radius:20px;box-shadow:0 10px 40px rgba(14,80,110,.18);padding:4px;width:100%;max-width:780px}
+.bnav button{flex:1;display:flex;flex-direction:row;align-items:center;justify-content:center;gap:5px;padding:9px 2px;border-radius:16px;font-size:12px;font-weight:700;color:var(--muted);min-width:0;white-space:nowrap}
+.bnav button svg{width:18px;height:18px;flex:none}
+@media (max-width:360px){.bnav button{flex-direction:column;gap:1px;padding:6px 1px;font-size:10.5px}}
+.bnav button.on{color:var(--violet);background:#E1F4F8}
+.handle{position:fixed;z-index:31;left:50%;transform:translateX(-50%);bottom:calc(12px + var(--sb));height:26px;padding:0 12px;border-radius:9px;background:var(--grad);color:#fff;font-weight:700;font-size:12px;display:flex;align-items:center;gap:4px;box-shadow:0 8px 24px rgba(14,165,201,.35);transition:bottom .28s cubic-bezier(.2,.8,.2,1)}
+.handle svg{width:14px;height:14px;transition:transform .25s}
+.handle.up{bottom:calc(64px + var(--sb))}
+.handle.up svg{transform:rotate(180deg)}
+/* sheets */
+.sheet-wrap{position:fixed;inset:0;z-index:60;background:rgba(10,40,55,.35);display:flex;align-items:flex-end;justify-content:center}
+.sheet-wrap.anim{animation:fade .2s}
+.sheet-wrap.anim .sheet{animation:up .28s cubic-bezier(.2,.8,.2,1)}
+.sheet{background:var(--bg);width:100%;max-width:560px;max-height:92dvh;border-radius:26px 26px 0 0;overflow:auto;padding:8px 16px calc(24px + var(--sb))}
+@media (min-width:700px){.sheet-wrap{align-items:center}.sheet{border-radius:26px;max-height:88dvh}}
+.grab{width:42px;height:5px;border-radius:9px;background:#CFDFE4;margin:4px auto 10px}
+.sheet-h{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.sheet-h h2{flex:1;margin:0;font-size:20px;font-weight:800}
+.sheet-h h2 small{display:block;font-size:12.5px;color:var(--muted);font-weight:600;text-transform:none;margin-top:2px}
+.sheet-h .ibtn{width:38px;height:38px}
+@keyframes up{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+label.lb{display:block;font-size:12.5px;font-weight:700;color:var(--muted);margin:12px 2px 6px}
+textarea.field{width:100%;min-height:220px;resize:vertical;line-height:1.45;font-size:14px}
+select.field{width:100%;appearance:none}
+.seg{display:flex;background:var(--card);border-radius:14px;padding:4px;margin-bottom:12px;box-shadow:0 2px 10px rgba(14,80,110,.06)}
+.seg button{flex:1;padding:9px 4px;border-radius:10px;font-weight:700;font-size:13px;color:var(--muted)}
+.seg button.on{background:var(--violet);color:#fff}
+.seg7 button{padding:9px 1px;font-size:12px;white-space:nowrap}
+.guide-btn{display:flex;align-items:center;width:100%;text-align:left;font-size:19px;font-weight:800;gap:10px}
+.guide-btn span:first-child{flex:1}
+.guide-btn .chev{width:22px;height:22px;color:var(--violet);transition:transform .2s}
+.guide-btn.open{padding:0 0 4px;box-shadow:none}
+.guide-btn.open .chev{transform:rotate(90deg)}
+.guide h4{margin:16px 0 6px;font-size:14.5px;font-weight:800;color:var(--violet)}
+.guide h4:first-of-type{margin-top:4px}
+.guide ul{margin:0;padding-left:20px;line-height:1.5;font-size:14px}
+.guide li{margin:3px 0}
+.guide .dotx{display:inline-block;width:11px;height:11px;border-radius:50%;vertical-align:-1px;margin-right:4px}
+.guide .ex{font-style:italic;color:var(--muted)}
+.help{font-size:12.5px;color:var(--muted);line-height:1.45;margin:6px 2px}
+.btns{display:flex;gap:10px;margin-top:14px}
+.btns .pill{flex:1;text-align:center;padding:12px}
+/* pages */
+.page-h{display:flex;align-items:center;gap:10px;margin:6px 2px 12px}
+.page-h h1{margin:0;font-size:26px;font-weight:800;flex:1}
+.rt{line-height:1.55;font-size:14.5px}
+.rt .h{font-weight:800;margin-top:12px;color:var(--violet)}
+.rt .h:first-child{margin-top:0}
+.rt .b{padding-left:14px;position:relative}
+.rt .b:before{content:'';position:absolute;left:3px;top:.65em;width:5px;height:5px;border-radius:50%;background:var(--pink)}
+.rt .gap{height:8px}
+/* mete */
+.mete{position:fixed;inset:0;z-index:50;background:linear-gradient(180deg,#E4F5FC 0%,#E6FAF5 55%,#F2FBF6 100%);overflow:auto;padding:calc(16px + var(--st)) 18px calc(40px + var(--sb))}
+.mete.anim{animation:fade .25s}
+.mete-in{max-width:620px;margin:0 auto}
+.mete .close{position:fixed;top:calc(14px + var(--st));right:16px;z-index:2}
+.mete h1{font-size:40px;font-weight:800;margin:26px 0 2px;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;display:inline-block}
+.mete .per{color:var(--muted);font-weight:600;margin-bottom:18px}
+.mete .card{border-radius:22px}
+.mete .chk{padding:10px 0}
+.mete .chk .t{font-weight:600}
+.mete ol{margin:0;padding-left:22px;line-height:1.8}
+/* notes */
+.fold{display:flex;align-items:center;gap:12px;padding:14px;background:var(--card);border-radius:16px;box-shadow:0 2px 12px rgba(14,80,110,.06);margin-bottom:8px;width:100%;text-align:left}
+.fold .ic{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;color:#fff}
+.fold .ic svg{width:20px;height:20px}
+.fold .nm{flex:1;font-weight:700}
+.fold .ct{color:var(--muted);font-size:12.5px;font-weight:600}
+.note-i{display:block;width:100%;text-align:left;background:var(--card);border-radius:16px;padding:12px 14px;margin-bottom:8px;box-shadow:0 2px 12px rgba(14,80,110,.06)}
+.note-i b{display:block;margin-bottom:3px}
+.note-i span{color:var(--muted);font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.spend{background:#FFF1F2;border:2px solid #FECDD3;color:#E11D48;border-radius:20px;padding:16px 14px;margin:0 0 12px;text-align:center;font-weight:800;font-size:21px;line-height:1.3;letter-spacing:.3px;box-shadow:var(--shadow)}
+.dispo h3 .ej{font-size:20px}
+.df{display:grid;grid-template-columns:128px 1fr;gap:10px;padding:8px 0;border-top:1px solid #EEF5F7;font-size:14px}
+.df .dl{color:var(--muted);font-weight:700;font-size:12.5px;line-height:1.35}
+.df .dv{line-height:1.4;word-break:break-word}
+.dp{display:flex;justify-content:space-between;gap:8px}
+.dp.tot{border-top:1.5px dashed var(--line);margin-top:4px;padding-top:4px;color:var(--violet)}
+.du{font-size:11.5px;color:var(--muted);margin-top:2px}
+.muted{color:var(--muted);font-style:italic}
+.dmn{display:flex;align-items:center;gap:8px;padding:8px 0 4px;border-top:1px solid #EEF5F7}
+.dmn .ibtn{width:32px;height:32px;border-radius:10px;box-shadow:none;background:var(--soft)}
+.dmn .ibtn svg{width:16px;height:16px}
+.dmn span{flex:1;text-align:center;font-weight:800;text-transform:capitalize}
+.dmb{display:flex;justify-content:space-between;align-items:center;padding:0 0 6px}
+.cin{width:100px;border:1.5px solid var(--line);background:#F8FCFD;border-radius:10px;padding:6px 8px;font-weight:800;text-align:right;outline:none}
+.cin:focus{border-color:var(--violet);background:#fff}
+.dp .cw{white-space:nowrap;display:flex;align-items:center;gap:5px}
+.hrow{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid #EEF5F7}
+.hrow .d{font-weight:700;min-width:92px;text-transform:capitalize}
+.hrow .nt{flex:1;color:var(--muted);font-size:13px;word-break:break-word}
+.hrow b{white-space:nowrap}
+.htot{display:flex;justify-content:space-between;align-items:center;background:var(--soft);border-radius:12px;padding:10px 12px;margin:8px 0 4px;font-weight:800}
+.htot span{font-size:20px;color:var(--violet)}
+.add.hours{flex-wrap:wrap}
+.add.hours input[type=date]{flex:1 1 140px}
+.add.hours input[type=number]{flex:0 1 80px}
+.add.hours input[name=n]{flex:1 1 100%;order:3}
+.empty{color:var(--muted);text-align:center;padding:22px 10px;font-size:14px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);top:calc(70px + var(--st));z-index:90;background:var(--ink);color:#fff;padding:10px 16px;border-radius:14px;font-size:13.5px;font-weight:600;box-shadow:0 8px 30px rgba(0,0,0,.2);animation:fade .2s;max-width:90vw;text-align:center}
+.status{margin:40px auto;max-width:360px;text-align:center;color:var(--muted);line-height:1.5}
+.spin{width:30px;height:30px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--violet);animation:sp 0.8s linear infinite;margin:0 auto 12px}
+@keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <button class="ibtn" id="leftBtn" data-a="left" aria-label="Menu"></button>
+    <div class="logo">VF</div>
+    <button class="ibtn" id="setBtn" data-a="settings" aria-label="Impostazioni"></button>
+  </header>
+  <div class="body">
+    <aside class="side" id="side"><div class="side-in" id="sideIn"></div></aside>
+    <main class="main" id="main"></main>
+  </div>
+</div>
+<div class="scrim" id="scrim" data-a="closeSide"></div>
+<nav class="bnav" id="bnav"><div class="bnav-in" id="bnavIn"></div></nav>
+<button class="handle" id="handle" data-a="toggleBottom"></button>
+<div id="mete"></div>
+<div id="sheet"></div>
+<input type="file" id="restoreFile" accept=".json,application/json" style="display:none">
+
+<script>
+(function(){
+'use strict';
+/* ---------- icons ---------- */
+const I = {
+  menu:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h10M4 17h16"/></svg>',
+  back:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+  dots:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
+  x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  chev:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>',
+  left:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+  right:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>',
+  up:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg>',
+  cal:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="4"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
+  target:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>',
+  money:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="12.5" rx="3.5"/><circle cx="12" cy="12.25" r="2.8"/><path d="M6 9.5v.01M18 15v.01"/></svg>',
+  body:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 8v8M17.5 8v8M3.5 10v4M20.5 10v4M6.5 12h11"/></svg>',
+  notes:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14 3.5V8h5M9 12.5h6M9 16h4"/></svg>',
+  folder:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></svg>',
+  pin:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.6 2.6a1 1 0 0 1 1.4 0l4.4 4.4a1 1 0 0 1 0 1.4l-1.2 1.2a1 1 0 0 1-1 .25l-3.5 3.5.3 3.6a1 1 0 0 1-.3.8l-1 1a1 1 0 0 1-1.4 0l-3.3-3.3-4.6 4.6a.9.9 0 1 1-1.3-1.3l4.6-4.6-3.3-3.3a1 1 0 0 1 0-1.4l1-1a1 1 0 0 1 .8-.3l3.6.3 3.5-3.5a1 1 0 0 1 .25-1z"/></svg>',
+  arrowR:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>'
+};
+const PALETTE = ['#0EA5C9','#14C2A8','#38BDF8','#10B981','#F59E0B','#06B6D4','#22C55E','#3B82F6','#2DD4BF','#F97316'];
+
+/* ---------- utils ---------- */
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad = n => String(n).padStart(2,'0');
+const ymd = d => d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const today = () => ymd(new Date());
+const parseD = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
+const addDays = (s,n) => { const d = parseD(s); d.setDate(d.getDate()+n); return ymd(d); };
+const mondayOf = s => { const d = parseD(s); const k = (d.getDay()+6)%7; d.setDate(d.getDate()-k); return ymd(d); };
+const ym = s => s.slice(0,7);
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const strip = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g,'');
+const fmt = (s, o) => parseD(s).toLocaleDateString('it-IT', o);
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+const DAYS_IT = ['DOMENICA','LUNEDÌ','MARTEDÌ','MERCOLEDÌ','GIOVEDÌ','VENERDÌ','SABATO'];
+const WEEK_ORDER = [1,2,3,4,5,6,0];
+function lsGet(k, d){ try { const v = localStorage.getItem('vf_'+k); return v == null ? d : JSON.parse(v); } catch(e){ return d; } }
+function lsSet(k, v){ try { localStorage.setItem('vf_'+k, JSON.stringify(v)); } catch(e){} }
+
+function ring(frac, color, size, label, track){
+  size = size || 38; const sw = size > 36 ? 3.5 : 3; const r = (size - sw)/2 - .5; const c = 2*Math.PI*r;
+  const f = Math.max(0, Math.min(1, frac || 0));
+  return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'"><circle class="bg" cx="'+size/2+'" cy="'+size/2+'" r="'+r+'" fill="none" stroke="'+(track||'#E3EFF2')+'" stroke-width="'+sw+'"/>' +
+    (f>0 ? '<circle class="fg" cx="'+size/2+'" cy="'+size/2+'" r="'+r+'" fill="none" stroke="'+color+'" stroke-width="'+sw+'" stroke-linecap="round" stroke-dasharray="'+(c*f)+' '+c+'"/>' : '') + '</svg>' + (label != null ? '<b>'+label+'</b>' : '');
+}
+function richText(t){
+  if (!t || !t.trim()) return '<div class="empty">Ancora vuoto. Tocca “Modifica” per scrivere.</div>';
+  return '<div class="rt">' + t.split('\n').map(l => {
+    const s = l.trim();
+    if (!s) return '<div class="gap"></div>';
+    if (/^[-•]/.test(s)) return '<div class="b">'+esc(s.replace(/^[-•]\s*/,''))+'</div>';
+    if (/:$/.test(s) || (s === s.toUpperCase() && /[A-ZÀ-Ú]/.test(s) && s.length < 40)) return '<div class="h">'+esc(s.replace(/:$/,''))+'</div>';
+    return '<div>'+esc(s)+'</div>';
+  }).join('') + '</div>';
+}
+function toast(msg){
+  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2600);
+}
+
+/* ---------- state ---------- */
+const COLS = ['config','pages','days','weeks','tasks','notes'];
+const S = {
+  db:null, dl:null, status:'loading', got:{},
+  c:{config:{},pages:{},days:{},weeks:{},tasks:{},notes:{}},
+  view:'tempo', month: ym(today()), side:false, tab: lsGet('tab','week'), bottom:false,
+  openCat: lsGet('openCat', {}), mete:false, sheet:null, fisTab:'fisico', editPage:null, folder:null
+};
+const cfg = () => S.c.config.main || {};
+const page = k => S.c.pages[k] || {};
+
+/* ---------- writes ---------- */
+const queues = {};
+function put(path, data){
+  const [col, id] = path.split('/');
+  S.c[col][id] = data;
+  if (!S.db) return;
+  queues[path] = (queues[path] || Promise.resolve()).then(() => S.db.doc(path).set(data)).catch(e => { console.error(e); toast('Non sono riuscito a salvare. Riprova.'); });
+}
+function del(path){
+  const [col, id] = path.split('/');
+  delete S.c[col][id];
+  if (!S.db) return;
+  queues[path] = (queues[path] || Promise.resolve()).then(() => S.db.doc(path).delete()).catch(e => { console.error(e); toast('Non sono riuscito a eliminare. Riprova.'); });
+}
+const putCfg = patch => put('config/main', Object.assign({}, cfg(), patch));
+const putPage = (k, patch) => put('pages/'+k, Object.assign({}, page(k), patch));
+
+/* ---------- parsing ---------- */
+function parseRoutine(txt){
+  const groups = []; let g = null;
+  String(txt || '').split('\n').forEach(raw => {
+    const l = raw.trim();
+    if (!l){ g = null; return; }
+    if (l.startsWith('#')){ g = {title:l.replace(/^#+\s*/,''), items:[]}; groups.push(g); return; }
+    if (!g){ g = {title:'', items:[]}; groups.push(g); }
+    g.items.push(l.replace(/^[-•]\s*/,''));
+  });
+  return groups.filter(x => x.items.length);
+}
+function weekToText(w){
+  const parts = [];
+  WEEK_ORDER.forEach(d => { if ((w.days[d]||[]).length) parts.push(DAYS_IT[d] + '\n' + w.days[d].join('\n')); });
+  if (w.days.w) parts.push('WEEKEND' + (w.days.w.length ? '\n' + w.days.w.join('\n') : ''));
+  parts.push('IMPEGNI FISSI' + (w.fixed.length ? '\n' + w.fixed.join('\n') : ''));
+  return parts.join('\n\n');
+}
+function routineFor(date){
+  const r = cfg().routine || {}; const d = parseD(date).getDay();
+  const t = d === 5 ? r.venerdi : (d === 0 || d === 6) ? r.weekend : (r[WD_KEYS[d]] != null ? r[WD_KEYS[d]] : r.feriale);
+  return parseRoutine(t).map(g => ({title:g.title, items:g.items.map(x => itemOn(x, date)).filter(x => x)})).filter(g => g.items.length);
+}
+/* tag in fondo alla voce: [lun mer ven] solo quei giorni; [alterna A|B] settimane alterne */
+const DAY_TAGS = {lun:1, mar:2, mer:3, gio:4, ven:5, sab:6, dom:0};
+const WD_KEYS = {1:'lun', 2:'mar', 3:'mer', 4:'gio'};
+function itemOn(raw, date){
+  let s = raw, ok = true, m; const dow = parseD(date).getDay(); const par = weekParity(mondayOf(date));
+  while ((m = s.match(/\s*\[([^\]]+)\]\s*$/))){
+    const tag = strip(m[1].trim().toLowerCase());
+    const alt = tag.match(/^alterna(?:\s+([ab]))?$/);
+    if (alt){ if ((alt[1] || 'a').toUpperCase() !== par) ok = false; }
+    else {
+      const ds = tag.split(/[\s,]+/).filter(Boolean);
+      if (!ds.length || !ds.every(x => x in DAY_TAGS)) break;
+      if (!ds.some(x => DAY_TAGS[x] === dow)) ok = false;
+    }
+    s = s.slice(0, m.index);
+  }
+  return ok ? s.trim() : null;
+}
+function dayRoutine(date){
+  const hid = new Set((S.c.days[date] || {}).hidden || []);
+  return routineFor(date).map(g => ({title:g.title, items:g.items.filter(x => !hid.has(x))})).filter(g => g.items.length);
+}
+/* voci della routine con il pulsante "Domani →" (config/main.postpone, altrimenti queste) */
+const POSTPONE_DEF = ['CLAUDE LEZIONE FINANZIARIA', 'CLAUDE LEZIONE ANALISI 1', '10 PAGINE LIBRO'];
+function postponable(t){ const list = cfg().postpone || POSTPONE_DEF; const n = strip(String(t).toUpperCase()).trim(); return list.some(x => strip(String(x).toUpperCase()).trim() === n); }
+function routineKey(date){ const d = parseD(date).getDay(); return d === 5 ? 'venerdi' : (d === 0 || d === 6) ? 'weekend' : WD_KEYS[d]; }
+function stripTags(raw){
+  let s = String(raw).trim().replace(/^[-•]\s*/,''), m;
+  while ((m = s.match(/\s*\[([^\]]+)\]\s*$/))){
+    const tag = strip(m[1].trim().toLowerCase());
+    if (!/^alterna(\s+[ab])?$/.test(tag)){ const ds = tag.split(/[\s,]+/).filter(Boolean); if (!ds.length || !ds.every(x => x in DAY_TAGS)) break; }
+    s = s.slice(0, m.index);
+  }
+  return s.trim();
+}
+function dayStats(date){
+  const items = dayRoutine(date).flatMap(g => g.items);
+  const doc = S.c.days[date] || {};
+  const done = (doc.done || []).filter(t => items.includes(t)).length;
+  return {total: items.length, done, frac: items.length ? done/items.length : 0, extras: (doc.extras || []).length, extrasOpen: (doc.extras||[]).filter(e => !e.done).length};
+}
+function parseWeek(txt){
+  const days = {}; const fixed = []; let cur = null;
+  String(txt || '').split('\n').forEach(raw => {
+    const l = raw.trim(); if (!l) return;
+    const u = strip(l.toUpperCase()).replace(/[:\-–]/g,'').trim();
+    const di = DAYS_IT.findIndex(d => strip(d) === u);
+    if (di >= 0){ cur = di; days[di] = days[di] || []; return; }
+    if (u === 'IMPEGNI FISSI'){ cur = 'f'; return; }
+    if (u === 'WEEKEND'){ cur = 'w'; days.w = days.w || []; return; }
+    const it = l.replace(/^[-•]\s*/,'');
+    if (cur === 'f') fixed.push(it); else if (cur !== null) days[cur].push(it);
+  });
+  return {days, fixed};
+}
+
+/* alternate weeks: an item ending with [alterna] shows on weeks 0,2,4... from 16 nov 2026; [alterna B] on the others */
+const ALT_ANCHOR = '2026-11-16';
+function weekParity(ws){ return Math.round((parseD(ws) - parseD(ALT_ANCHOR)) / (7*864e5)) % 2 === 0 ? 'A' : 'B'; }
+function visibleItems(list, ws){
+  const p = weekParity(ws);
+  return (list || []).map((raw, idx) => {
+    const m = raw.match(/\s*\[alterna(?:\s+([AB]))?\]\s*$/i);
+    if (!m) return {text: raw, alt: false, idx};
+    return {text: raw.replace(m[0], '').trim(), alt: true, on: (m[1] || 'A').toUpperCase(), idx};
+  }).filter(x => !x.alt || x.on === p);
+}
+function weekGroups(w, ws){
+  const order = [1,2,3,4,5,'w',6,0]; const out = [];
+  order.forEach(k => {
+    if (k === 'w'){ if (w.days.w) out.push({k:'w', name:'Weekend', items: visibleItems(w.days.w, ws)}); return; }
+    const items = visibleItems(w.days[k], ws); if (items.length) out.push({k, name: cap(DAYS_IT[k].toLowerCase()), items});
+  });
+  return out;
+}
+
+/* ---------- derived ---------- */
+const cats = kind => (cfg().cats || []).filter(c => !kind || c.kind === kind);
+const catColor = id => { const i = (cfg().cats || []).findIndex(c => c.id === id); return PALETTE[(i < 0 ? 0 : i) % PALETTE.length]; };
+const weekStart = () => mondayOf(today());
+const weekStartMs = () => parseD(weekStart()).getTime();
+const viewWeek = () => S.weekView || weekStart();
+const taskWeek = t => t.week || '2026-11-16';
+function tasksOf(scope, cat){
+  const ws = weekStartMs();
+  return Object.entries(S.c.tasks).map(([id, t]) => Object.assign({id}, t))
+    .filter(t => t.scope === scope && (!cat || t.cat === cat))
+    .filter(t => { if (scope !== 'week') return true; const v = viewWeek(), tw = taskWeek(t); return v === weekStart() ? tw <= v : tw === v; })
+    .sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
+}
+function weekCopyOf(id){ const ws = weekStart(); return Object.entries(S.c.tasks).find(([,t]) => t.scope === 'week' && t.fromId === id && taskWeek(t) === ws) || null; }
+function needsBackup(){ const lb = cfg().lastBackup; return !lb || (Date.now() - new Date(lb).getTime()) > 7*864e5; }
+function doneListCount(){ return Object.values(S.c.tasks).filter(t => t.done).length; }
+function needsCleanup(){ const lc = cfg().lastCleanup; return doneListCount() > 0 && (!lc || (Date.now() - new Date(lc).getTime()) > 7*864e5); }
+
+/* ---------- render helpers ---------- */
+function isTyping(el){ const a = document.activeElement; return a && el.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName); }
+function setHTML(el, html, force){
+  if (!force && isTyping(el)) return false;
+  const sc = el.scrollTop; el.innerHTML = html; el.scrollTop = sc; return true;
+}
+function chkRow(done, attrs, text, extra, rowAttrs, cls){
+  return '<div class="chk'+(done?' done':'')+(cls?' '+cls:'')+'" '+(rowAttrs||'')+'><button class="box" '+attrs+' aria-label="Spunta">'+I.check+'</button><div class="t" '+attrs+'>'+esc(text)+'</div>'+(extra||'')+'</div>';
+}
+function progress(done, total){
+  const p = total ? Math.round(done/total*100) : 0;
+  return '<div class="prog"><i style="width:'+p+'%"></i></div><div class="prog-l"><span>'+done+' su '+total+' fatti</span><span>'+p+'%</span></div>';
+}
+
+/* ---------- main render ---------- */
+function render(force){
+  document.body.classList.toggle('mete-open', S.mete);
+  document.body.classList.toggle('bshow', S.bottom);
+  $('leftBtn').innerHTML = S.view === 'tempo' ? I.menu : I.back;
+  $('leftBtn').classList.toggle('on', S.view === 'tempo' && S.side);
+  $('setBtn').innerHTML = I.dots + (S.status === 'ok' ? '<span class="badge'+((needsBackup() || needsCleanup() || needsMoney()) ? ' warn' : '')+'"></span>' : '');
+  const showSide = S.view === 'tempo' && S.side;
+  $('side').classList.toggle('open', showSide);
+  $('scrim').classList.toggle('show', showSide);
+  $('bnav').classList.toggle('show', S.bottom);
+  $('handle').classList.toggle('up', S.bottom);
+  $('handle').innerHTML = I.up + (S.bottom ? 'Chiudi' : 'Sezioni');
+  renderBottom();
+  { const mh = renderMain(); if (mh !== S.lastMain && setHTML($('main'), mh, force)) S.lastMain = mh; }
+  if (S.view === 'tempo'){
+    const html = renderSide();
+    if (html !== S.lastSide && (force || !isTyping($('sideIn')))){
+      const sb = $('sideIn').querySelector('.side-body'); const st = sb ? sb.scrollTop : 0;
+      $('sideIn').innerHTML = html; S.lastSide = html;
+      const nb = $('sideIn').querySelector('.side-body'); if (nb) nb.scrollTop = S.sideTop ? 0 : st;
+    }
+    S.sideTop = false;
+  }
+  renderMete(force);
+  renderSheet(force);
+}
+function renderBottom(){
+  const items = [['tempo','cal','Tempo'],['mete','target','Mete'],['soldi','money','Soldi'],['fisico','body','Fisico'],['note','notes','Note']];
+  $('bnavIn').innerHTML = items.map(([k,ic,l]) => '<button class="'+((k === 'mete' ? S.mete : (S.view === k && !S.mete)) ? 'on' : '')+'" data-a="nav" data-v="'+k+'">'+I[ic]+l+'</button>').join('');
+}
+function renderMain(){
+  if (S.status === 'loading') return '<div class="status"><div class="spin"></div>Carico i tuoi dati…</div>';
+  if (S.status === 'nodb') return '<div class="status"><b>VF non riesce a collegarsi ai tuoi dati.</b><br>Controlla la connessione e riapri l’app. I dati non sono persi.</div>';
+  if (S.status === 'error') return '<div class="status"><b>Connessione persa.</b><br>Ricarica la pagina tra poco: i tuoi dati sono al sicuro.</div>';
+  let pre = '';
+  if (S.status === 'slow') pre = '<div class="banner"><span class="em">⏳</span><div class="tx">I dati ci stanno mettendo un po’ ad arrivare: quello che vedi potrebbe non essere aggiornato.</div></div>';
+  if (S.view === 'tempo') return pre + renderCalendar();
+  if (S.view === 'soldi') return pre + renderSoldi();
+  if (S.view === 'fisico') return pre + renderFisico();
+  if (S.view === 'note') return pre + renderNotes();
+  return '';
+}
+
+/* ---------- calendar ---------- */
+function renderCalendar(){
+  let h = '';
+  if (needsBackup()) h += '<div class="banner"><span class="em">📦</span><div class="tx"><b>Scarica il backup</b>'+(cfg().lastBackup ? 'È passata più di una settimana dall’ultimo.' : 'Non l’hai ancora mai scaricato.')+'</div><button class="pill" data-a="backupDl">Scarica</button></div>';
+  if (needsCleanup()) h += '<div class="banner"><span class="em">🧹</span><div class="tx"><b>Pulisci i fatti</b>'+(doneListCount() === 1 ? 'Hai 1 impegno già spuntato da togliere.' : 'Hai '+doneListCount()+' impegni già spuntati da togliere.')+'</div><button class="pill pink" data-a="cleanDone">Pulisci</button></div>';
+  if (needsMoney()) h += '<div class="banner"><span class="em">💰</span><div class="tx"><b>Aggiorna le cifre dei soldi</b>Mancano le cifre di '+esc(fmt(today(), {month:'long'}))+': '+esc(moneyMissing().map(d => d.title.replace(/\s*\(.*\)\s*$/, '')).join(', '))+'.</div><button class="pill" data-a="nav" data-v="soldi">Vai</button></div>';
+  const [y, m] = S.month.split('-').map(Number);
+  const first = new Date(y, m-1, 1); const off = (first.getDay()+6)%7;
+  const start = ymd(new Date(y, m-1, 1-off));
+  const dim = new Date(y, m, 0).getDate(); const cells = Math.ceil((off+dim)/7)*7;
+  const t = today();
+  const title = first.toLocaleDateString('it-IT', {month:'long', year:'numeric'});
+  h += '<div class="cal"><div class="cal-h"><h2>'+esc(title)+'</h2>' +
+    (S.month !== ym(t) ? '<button class="today-b" data-a="calToday">Oggi</button>' : '') +
+    '<button class="ibtn" data-a="calPrev" aria-label="Mese precedente">'+I.left+'</button><button class="ibtn" data-a="calNext" aria-label="Mese successivo">'+I.right+'</button></div>' +
+    '<div class="wd">'+['Lun','Mar','Mer','Gio','Ven','Sab','Dom'].map(d => '<div>'+d+'</div>').join('')+'</div><div class="grid">';
+  for (let i = 0; i < cells; i++){
+    const d = addDays(start, i); const st = dayStats(d);
+    const out = ym(d) !== S.month; const isT = d === t;
+    const showRing = d <= t || st.done > 0;
+    const col = st.frac >= 1 ? '#10B981' : '#0EA5C9';
+    h += '<button class="day'+(out?' out':'')+(isT?' today':'')+'" data-a="openDay" data-d="'+d+'"><span class="rw">'+(showRing ? ring(st.frac, col, 40) : '')+'<span class="n">'+parseD(d).getDate()+'</span></span><span class="dot'+(st.extras ? '' : ' none')+'"></span></button>';
+  }
+  h += '</div><div class="legend"><span><i style="background:var(--violet)"></i>Routine fatta</span><span><i style="background:var(--coral)"></i>Impegni extra</span></div></div>';
+  return h;
+}
+
+/* ---------- sidebar ---------- */
+function renderSide(){
+  const tabs = [['week','Settimana'],['pers','Personali'],['proj','Progetti']];
+  let h = '<div class="side-top"><div class="tabs">'+tabs.map(([k,l]) => '<button class="'+(S.tab===k?'on':'')+'" data-a="tab" data-t="'+k+'">'+l+'</button>').join('')+'</div><button class="ibtn" data-a="closeSide" aria-label="Chiudi">'+I.x+'</button></div><div class="side-body">';
+  if (S.tab === 'week') h += renderWeek();
+  else h += renderCatList(S.tab);
+  return h + '</div>';
+}
+function renderWeek(){
+  const w = parseWeek(cfg().week); const ws = viewWeek(); const wdoc = S.c.weeks[ws] || {}; const done = new Set(wdoc.done || []);
+  const isCur = ws === weekStart(); const tdow = isCur ? parseD(today()).getDay() : -1;
+  const extra = tasksOf('week');
+  let total = 0, dn = 0;
+  const fixedV = visibleItems(w.fixed, ws);
+  fixedV.forEach(it => { total++; if (done.has('fix|'+it.text)) dn++; });
+  extra.forEach(t => { total++; if (t.done) dn++; });
+  const end = addDays(ws, 6);
+  const diff = Math.round((parseD(ws) - parseD(weekStart())) / (7*864e5));
+  const lbl = diff === 0 ? 'Questa settimana' : diff === 1 ? 'Settimana prossima' : diff === -1 ? 'Settimana scorsa' : diff > 0 ? 'Tra '+diff+' settimane' : (-diff)+' settimane fa';
+  let h = '<div class="card"><div class="wnav"><button class="ibtn" data-a="weekPrev" aria-label="Settimana precedente">'+I.left+'</button><div class="wnav-t"><b>'+fmt(ws,{day:'numeric',month:'short'})+' – '+fmt(end,{day:'numeric',month:'short'})+'</b><span>'+lbl+'</span></div><button class="ibtn" data-a="weekNext" aria-label="Settimana successiva">'+I.right+'</button></div>' + (isCur ? '' : '<div style="text-align:center;margin:-2px 0 8px"><button class="mini" data-a="weekToday">↩ Torna a questa settimana</button></div>') + progress(dn,total)+'</div>';
+  h += '<div class="sec-t">Impegni fissi della settimana</div><div class="card">';
+  fixedV.forEach((it,i) => { h += chkRow(done.has('fix|'+it.text), 'data-a="weekChk" data-k="fix" data-i="'+i+'"', it.text, (it.alt ? '<span class="alt">ogni 2 sett.</span>' : '') + '<button class="x" data-a="fixedDel" data-i="'+it.idx+'" aria-label="Elimina">'+I.x+'</button>'); });
+  if (w.fixed.length && !fixedV.length) h += '<div class="help">Questa settimana nessun impegno fisso.</div>';
+  if (!w.fixed.length) h += '<div class="help">Nessun impegno fisso. Aggiungilo qui sotto.</div>';
+  h += '<form class="add" data-f="fixedAdd"><input name="t" placeholder="Aggiungi impegno fisso…" autocomplete="off" data-focus="fixedAdd"><button aria-label="Aggiungi impegno fisso">'+I.plus+'</button></form></div>';
+  h += '<div class="sec-t">Altri impegni della settimana</div>';
+  h += '<div class="help" style="margin-top:-2px">Restano qui (anche quelli fatti, barrati) finché non li togli tu con “Pulisci fatti”. Quelli delle settimane passate si vedono anche in questa settimana. Puoi aggiungere impegni anche in settimane future: scorri con le frecce in alto.</div><div class="row-btns"><button class="pill ghost" data-a="cleanDone">🧹 Pulisci fatti</button></div>';
+  h += catBlocks(cats(), 'week');
+  return h;
+}
+function renderCatList(kind){
+  const title = kind === 'pers' ? 'Impegni personali' : 'Cose da fare · Progetti';
+  const all = tasksOf('list').filter(t => cats(kind).some(c => c.id === t.cat));
+  const dn = all.filter(t => t.done).length;
+  let h = '<div class="card"><h3>'+title+'<span class="sub">'+(all.length-dn)+' da fare</span></h3>'+progress(dn, all.length);
+  h += '<div class="row-btns" style="margin-bottom:0;margin-top:10px"><button class="pill ghost" data-a="cleanDone">🧹 Pulisci fatti</button></div></div>';
+  h += catBlocks(cats(kind), 'list');
+  h += '<form class="add" data-f="catAdd" data-kind="'+kind+'" style="margin-top:12px"><input name="t" placeholder="Nuova categoria…" autocomplete="off" data-focus="catAdd-'+kind+'"><button aria-label="Aggiungi categoria">'+I.plus+'</button></form>';
+  return h;
+}
+function catBlocks(list, scope){
+  const rows = list.map(c => { const ts = tasksOf(scope, c.id); return {c, ts, open: ts.filter(t => !t.done).length}; });
+  const pin = r => (scope === 'week' && r.c.id === 'studio') ? 1 : 0;
+  rows.sort((a,b) => pin(b) - pin(a) || b.open - a.open || b.ts.length - a.ts.length);
+  const max = Math.max(1, ...rows.map(r => r.open));
+  return rows.map(({c, ts, open}) => {
+    const key = scope+':'+c.id; const isOpen = !!S.openCat[key]; const col = catColor(c.id);
+    let h = '<div class="cat'+(isOpen?' open':'')+(open?'':' zero')+'"><button class="cat-h" data-a="catToggle" data-k="'+esc(key)+'"><span class="ring">'+ring(open/max, col, 38, open, '#E8F2F5')+'</span><span class="nm">'+esc(c.name)+((scope === 'week' && c.id === 'studio') ? '<span class="pin" title="Fissato in alto">'+I.pin+'</span>' : '')+'</span><span class="ct">'+(ts.length ? (ts.length-open)+'/'+ts.length : '')+'</span><span class="chev">'+I.chev+'</span></button>';
+    if (isOpen){
+      h += '<div class="cat-b">';
+      if (!ts.length) h += '<div class="help">Nessun impegno.</div>';
+      ts.forEach(t => {
+        let wk = '';
+        if (scope === 'list' && !t.done){ const inW = weekCopyOf(t.id); wk = '<button class="act wk'+(inW?' on':'')+'" data-a="taskToWeek" data-id="'+t.id+'">'+(inW ? '↩ Settimana' : '+ Settimana')+'</button>'; }
+        h += chkRow(t.done, 'data-a="taskChk" data-id="'+t.id+'"', t.text, wk + '<button class="x" data-a="taskEdit" data-id="'+t.id+'" aria-label="Modifica">'+I.dots+'</button>');
+      });
+      h += '<form class="add" data-f="taskAdd" data-cat="'+c.id+'" data-scope="'+scope+'"><input name="t" placeholder="Aggiungi impegno…" autocomplete="off" data-focus="add-'+esc(key)+'"><button aria-label="Aggiungi">'+I.plus+'</button></form>';
+      if (scope === 'list') h += '<div style="text-align:right;margin-top:8px"><button class="mini" data-a="catEdit" data-id="'+c.id+'">Rinomina o elimina categoria</button></div>';
+      h += '</div>';
+    }
+    return h + '</div>';
+  }).join('');
+}
+
+/* ---------- pages ---------- */
+function editableCard(key, title, body){
+  if (S.editPage === key){
+    return '<div class="card"><h3>'+esc(title)+'</h3><textarea class="field" id="pageText" data-focus="page-'+key+'">'+esc(body||'')+'</textarea><div class="help">Una riga che finisce con “:” diventa un titolo, una riga che inizia con “-” diventa un punto elenco.</div><div class="btns"><button class="pill ghost" data-a="pageCancel">Annulla</button><button class="pill" data-a="pageSave" data-k="'+key+'">Salva</button></div></div>';
+  }
+  return '<div class="card"><h3>'+esc(title)+'<span class="sub"><button class="mini" data-a="pageEdit" data-k="'+key+'">Modifica</button></span></h3>'+richText(body)+'</div>';
+}
+function renderSoldi(){
+  const p = page('soldi'); const mk = ym(today()); const ch = new Set((p.checks || {})[mk] || []);
+  const mon = (p.monthly || []);
+  const label = cap(new Date().toLocaleDateString('it-IT', {month:'long', year:'numeric'}));
+  let h = '<div class="page-h"><h1>💵 Soldi 💵</h1></div>';
+  if (p.banner) h += '<div class="spend">'+esc(p.banner)+'</div>';
+  h += '<div class="card"><h3>Da fare questo mese<span class="sub">'+esc(label)+'</span></h3>'+progress(mon.filter(x => ch.has(x.id)).length, mon.length);
+  mon.forEach(x => { h += chkRow(ch.has(x.id), 'data-a="soldiChk" data-id="'+x.id+'"', x.text); });
+  if (!mon.length) h += '<div class="empty">Nessuna voce.</div>';
+  h += '<div class="help">Le spunte ripartono da zero all’inizio di ogni mese.</div><div style="text-align:right;margin-top:6px"><button class="mini" data-a="soldiEdit">✏️ Modifica voci</button></div></div>';
+  h += dispoHTML(p);
+  /* ore di lavoro */
+  const hm = S.hoursMonth || mk; const fmtH = n => (Math.round(n*100)/100).toLocaleString('it-IT') + ' h';
+  const hrs = (p.hours || []).filter(x => ym(x.date) === hm).sort((a,b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  const tot = hrs.reduce((s,x) => s + (+x.h || 0), 0);
+  const hl = cap(parseD(hm+'-01').toLocaleDateString('it-IT', {month:'long', year:'numeric'}));
+  h += '<div class="card"><div class="wnav"><button class="ibtn" data-a="hoursPrev" aria-label="Mese precedente">'+I.left+'</button><div class="wnav-t"><b>⏱️ Ore di lavoro FG Service</b><span>'+esc(hl)+'</span></div><button class="ibtn" data-a="hoursNext" aria-label="Mese successivo">'+I.right+'</button></div>';
+  const rate = +p.rate || 0;
+  h += '<div class="htot">Totale del mese<span>'+fmtH(tot)+(rate ? ' · '+(Math.round(tot*rate*100)/100).toLocaleString('it-IT')+' €' : '')+'</span></div>';
+  if (rate) h += '<div class="help" style="margin-top:0">Calcolato a '+rate.toLocaleString('it-IT')+' €/ora (FG Service).</div>';
+  hrs.forEach(x => { h += '<div class="hrow"><span class="d">'+esc(fmt(x.date, {weekday:'short', day:'numeric', month:'short'}))+'</span><span class="nt">'+esc(x.note || '')+'</span><b>'+fmtH(+x.h || 0)+'</b><button class="x" data-a="hoursDel" data-id="'+x.id+'" aria-label="Elimina" style="width:26px;height:26px;display:grid;place-items:center;color:#A6B8C0">'+I.x+'</button></div>'; });
+  if (!hrs.length) h += '<div class="help">Nessuna ora segnata in questo mese.</div>';
+  const defD = hm === mk ? today() : hm+'-01';
+  h += '<form class="add hours" data-f="hoursAdd"><input type="date" name="d" value="'+defD+'"><input type="number" name="h" min="0" step="0.25" placeholder="Ore" inputmode="decimal" data-focus="hoursAdd"><button aria-label="Aggiungi ore">'+I.plus+'</button><input name="n" placeholder="Nota (facoltativa)" autocomplete="off"></form></div>';
+  h += editableCard('soldi', 'Altre note sui soldi', p.body);
+  return h;
+}
+const eurTxt = v => { const s = String(v == null ? '' : v).trim(); if (!s) return ''; return /^-?\d+([.,]\d+)?$/.test(s) ? Number(s.replace(',', '.')).toLocaleString('it-IT') + ' €' : s; };
+/* sezioni con storico mensile (track): hist = { 'YYYY-MM': numero | [numeri delle parti] } */
+function trackVals(d, m){ const v = (d.hist || {})[m]; if (d.parts) return Array.isArray(v) ? v.slice() : d.parts.map(() => null); return v == null ? null : v; }
+/* sezioni con cifra da aggiornare ogni mese: quelle con storico + quelle con cifra numerica o vuota (es. paghetta) */
+function moneyMissing(){
+  const t = today(); const m = ym(t);
+  return (page('soldi').dispo || []).filter(d => {
+    if (!d.track) return false;
+    const v = trackVals(d, m); return d.parts ? v.some(x => x == null || x === '') : (v == null || v === '');
+  });
+}
+function needsMoney(){ return +today().slice(8) >= 10 && moneyMissing().length > 0; }
+function niceStep(x){ const p = Math.pow(10, Math.floor(Math.log10(x))); const n = x / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p; }
+function sheetDpChart(id){
+  const d = (page('soldi').dispo || []).find(x => x.id === id); if (!d) return '';
+  const COLS = ['#0A9FC4', '#F59E0B'];
+  const segs = m => d.parts ? trackVals(d, m).map(x => +x || 0) : [+trackVals(d, m) || 0];
+  const months = Object.keys(d.hist || {}).filter(m => segs(m).some(v => v)).sort();
+  const tots = months.map(m => segs(m).reduce((a, b) => a + b, 0));
+  const mL = m => fmt(m+'-01', {month:'long', year:'numeric'}); const eu = v => v.toLocaleString('it-IT') + ' €';
+  let b = '';
+  if (!months.length) b = '<div class="empty">Ancora nessuna cifra segnata.</div>';
+  else {
+    const W = 520, H = 250, L = 58, R = 12, T = 24, B = 34, pw = W - L - R, ph = H - T - B;
+    const mx = Math.max(...tots, 1); const step = niceStep(mx / 4); const top = Math.ceil(mx / step) * step;
+    const y = v => T + ph - v / top * ph;
+    let s = '<svg viewBox="0 0 '+W+' '+H+'" width="100%" role="img" aria-label="Cifre mese per mese" style="display:block">';
+    for (let v = 0; v <= top + 1e-9; v += step) s += '<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y(v)+'" y2="'+y(v)+'" stroke="#E6EEF1"/><text x="'+(L-8)+'" y="'+(y(v)+4)+'" text-anchor="end" font-size="11" fill="#7A8D96">'+eu(v)+'</text>';
+    const bw = Math.min(56, pw / months.length * 0.6);
+    months.forEach((m, i) => {
+      const cx = L + pw * (i + 0.5) / months.length; let acc = 0;
+      segs(m).forEach((v, k) => { if (!v) return; const y0 = y(acc), y1 = y(acc + v); s += '<rect x="'+(cx-bw/2)+'" y="'+y1+'" width="'+bw+'" height="'+Math.max(0, y0 - y1 - (acc ? 2 : 0))+'" rx="4" fill="'+COLS[k]+'"><title>'+esc(mL(m))+(d.parts ? ' · '+esc(d.parts[k].label) : '')+': '+eu(v)+'</title></rect>'; acc += v; });
+      s += '<text x="'+cx+'" y="'+(y(tots[i]) - 7)+'" text-anchor="middle" font-size="12" font-weight="700" fill="#13262E">'+eu(tots[i])+'</text>';
+      s += '<text x="'+cx+'" y="'+(H-12)+'" text-anchor="middle" font-size="11" fill="#7A8D96">'+esc(parseD(m+'-01').toLocaleDateString('it-IT', {month:'short', year:'2-digit'}))+'</text>';
+    });
+    s += '<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y(0)+'" y2="'+y(0)+'" stroke="#C3D6DD"/></svg>';
+    b += '<div class="card">'+s;
+    if (d.parts) b += '<div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;font-size:12.5px;color:#7A8D96;margin-top:6px">'+d.parts.map((x, k) => '<span style="display:flex;align-items:center;gap:6px"><i style="width:10px;height:10px;border-radius:3px;background:'+COLS[k]+';display:inline-block"></i>'+esc(x.label)+'</span>').join('')+'</div>';
+    b += '</div><div class="card"><h3>Cifre per mese</h3>' + months.map((m, i) => '<div class="df"><div class="dl" style="text-transform:capitalize">'+esc(mL(m))+'</div><div class="dv">'+(d.parts ? segs(m).map((v, k) => esc(d.parts[k].label)+': '+eu(v)).join('<br>')+'<br><b>Totale: '+eu(tots[i])+'</b>' : '<b>'+eu(tots[i])+'</b>')+'</div></div>').reverse().join('') + '</div>';
+    if (months.length < 2) b += '<div class="help">Il grafico si riempie mese dopo mese, man mano che aggiorni le cifre.</div>';
+  }
+  return sheetFrame('📈 '+esc(d.title), 'Andamento mese per mese', b);
+}
+function dispoHTML(p){
+  const list = p.dispo || []; if (!list.length) return '';
+  const mlab = fmt(today(), {month:'long', year:'numeric'});
+  const row = (l, v) => '<div class="df"><div class="dl">'+l+'</div><div class="dv">'+(v ? esc(v) : '<span class="muted">da inserire</span>')+'</div></div>';
+  let h = '<div class="sec-t">Disposizione soldi</div>';
+  list.forEach((d, i) => {
+    let cif; const cur = ym(today()); const m = d.track ? ((S.dpMonth || {})[d.id] || cur) : cur;
+    const mlab = fmt(m+'-01', {month:'long', year:'numeric'});
+    if (d.track){
+      const vals = trackVals(d, m);
+      const inp = (v, pi) => '<input class="cin" data-dp="'+d.id+'"'+(pi != null ? ' data-part="'+pi+'"' : '')+' data-m="'+m+'" inputmode="decimal" placeholder="0" value="'+esc(v == null ? '' : String(v).replace('.', ','))+'">';
+      if (d.parts){ const tot = vals.reduce((s, x) => s + (+x || 0), 0); cif = d.parts.map((x, pi) => '<div class="dp" style="align-items:center;margin-bottom:4px"><span>'+esc(x.label)+'</span><span class="cw">'+inp(vals[pi], pi)+' €</span></div>').join('') + '<div class="dp tot"><span>Totale</span><b>'+esc(eurTxt(tot))+'</b></div>'; }
+      else cif = '<span class="cw" style="display:inline-flex">'+inp(vals)+' €</span>';
+    } else if (d.parts){
+      const tot = d.parts.reduce((s, x) => s + (+x.val || 0), 0);
+      cif = d.parts.map((x, pi) => '<div class="dp" style="align-items:center;margin-bottom:4px"><span>'+esc(x.label)+'</span><span class="cw"><input class="cin" data-dp="'+d.id+'" data-part="'+pi+'" inputmode="decimal" placeholder="0" value="'+esc(x.val == null ? '' : String(x.val).replace('.', ','))+'"> €</span></div>').join('') + '<div class="dp tot"><span>Totale</span><b>'+esc(eurTxt(tot))+'</b></div>';
+    } else if (!String(d.cifra || '').trim() || /^-?\d+([.,]\d+)?$/.test(String(d.cifra).trim())){
+      cif = '<span class="cw" style="display:inline-flex"><input class="cin" data-dp="'+d.id+'" inputmode="decimal" placeholder="0" value="'+esc(String(d.cifra || '').replace('.', ','))+'"> €</span>';
+    } else cif = '<b>'+esc(d.cifra)+'</b>';
+    h += '<div class="card dispo"><h3><span class="ej">'+esc(d.emoji || '')+'</span>'+(i+1)+'. '+esc(d.title)+'<span class="sub"><button class="mini" data-a="dispoEdit" data-id="'+d.id+'">Modifica</button></span></h3>' +
+      (d.track ? '<div class="dmn"><button class="ibtn" data-a="dpPrev" data-id="'+d.id+'" aria-label="Mese precedente">'+I.left+'</button><span>'+esc(mlab)+'</span><button class="ibtn" data-a="dpNext" data-id="'+d.id+'" aria-label="Mese successivo">'+I.right+'</button></div><div class="dmb">'+(m !== cur ? '<button class="mini" data-a="dpNow" data-id="'+d.id+'">↩ Mese attuale</button>' : '<span></span>')+'<button class="mini" data-a="dpChart" data-id="'+d.id+'">📈 Visualizza grafico</button></div>' : '') +
+      '<div class="df"><div class="dl">💰 Cifra '+esc(mlab)+'</div><div class="dv">'+cif+(d.upd ? '<div class="du">aggiornata il '+esc(fmt(d.upd, {day:'numeric', month:'long'}))+'</div>' : '')+'</div></div>' +
+      row('🎯 Uso', d.uso) + row('📍 Dove si trova', d.dove) + row('📥 Da dove arrivano', d.fonte) + '</div>';
+  });
+  return h;
+}
+function renderFisico(){
+  let h = '<div class="page-h"><h1>Fisico e alimentazione</h1></div>';
+  h += '<div class="seg"><button class="'+(S.fisTab==='fisico'?'on':'')+'" data-a="fisTab" data-t="fisico">💪 Fisico</button><button class="'+(S.fisTab==='alimentazione'?'on':'')+'" data-a="fisTab" data-t="alimentazione">🍲 Alimentazione</button></div>';
+  const k = S.fisTab;
+  h += editableCard(k, k === 'fisico' ? 'Fisico' : 'Alimentazione', page(k).body);
+  return h;
+}
+function renderNotes(){
+  const folders = cfg().noteFolders || [];
+  const notes = Object.entries(S.c.notes).map(([id,n]) => Object.assign({id}, n));
+  if (S.folder){
+    const f = folders.find(x => x.id === S.folder);
+    if (!f){ S.folder = null; return renderNotes(); }
+    const list = notes.filter(n => n.folder === f.id).sort((a,b) => (b.updatedAt||0) - (a.updatedAt||0));
+    let h = '<div class="page-h"><button class="ibtn" data-a="folderBack" aria-label="Indietro">'+I.back+'</button><h1 style="font-size:22px">'+esc(f.name)+'</h1><button class="ibtn" data-a="folderEdit" data-id="'+f.id+'" aria-label="Cartella">'+I.dots+'</button></div>';
+    h += '<button class="pill" style="width:100%;padding:13px;margin-bottom:12px" data-a="noteNew">+ Nuova nota</button>';
+    if (!list.length) h += '<div class="empty">Nessuna nota in questa cartella.</div>';
+    list.forEach(n => { h += '<button class="note-i" data-a="noteOpen" data-id="'+n.id+'"><b>'+esc(n.title || 'Senza titolo')+'</b><span>'+esc((n.body||'').slice(0,160))+'</span></button>'; });
+    return h;
+  }
+  let h = '<div class="page-h"><h1>Altre note</h1></div>';
+  if (!folders.length) h += '<div class="empty">Ancora nessuna cartella. Creane una qui sotto.</div>';
+  folders.forEach((f,i) => {
+    const n = notes.filter(x => x.folder === f.id).length;
+    h += '<button class="fold" data-a="folderOpen" data-id="'+f.id+'"><span class="ic" style="background:'+PALETTE[i%PALETTE.length]+'">'+I.folder+'</span><span class="nm">'+esc(f.name)+'</span><span class="ct">'+n+'</span></button>';
+  });
+  h += '<form class="add" data-f="folderAdd" style="margin-top:12px"><input name="t" placeholder="Nuova cartella…" autocomplete="off" data-focus="folderAdd"><button aria-label="Crea cartella">'+I.plus+'</button></form>';
+  return h;
+}
+
+/* ---------- mete ---------- */
+function renderMete(force){
+  const el = $('mete');
+  if (!S.mete){ el.innerHTML = ''; return; }
+  const p = page('mete'); const items = p.items || [];
+  let h = '<div class="mete'+(S.meteAnim?' anim':'')+'"><button class="ibtn close" data-a="closeMete" aria-label="Chiudi">'+I.x+'</button><div class="mete-in"><h1>Mete</h1> <span style="font-size:34px">🎯</span><div class="per">'+esc(p.period || '')+'</div>';
+  h += '<div class="card">'+progress(items.filter(x => x.done).length, items.length);
+  items.forEach(x => { h += chkRow(x.done, 'data-a="meteChk" data-id="'+x.id+'"', x.text, '<button class="x" data-a="meteEdit" data-id="'+x.id+'" aria-label="Modifica">'+I.dots+'</button>'); });
+  h += '<form class="add" data-f="meteAdd"><input name="t" placeholder="Nuova meta…" autocomplete="off" data-focus="meteAdd"><button aria-label="Aggiungi meta">'+I.plus+'</button></form></div>';
+  if ((p.character || []).length) h += '<div class="card"><h3>Obiettivi carattere</h3><ol>'+p.character.map(c => '<li>'+esc(c)+'</li>').join('')+'</ol></div>';
+  h += '</div></div>';
+  const wrap = el.firstElementChild;
+  if (wrap && !force && isTyping(wrap)) return;
+  const sc = wrap ? wrap.scrollTop : 0;
+  el.innerHTML = h; el.firstElementChild.scrollTop = sc; S.meteAnim = false;
+}
+
+/* ---------- sheets ---------- */
+function openSheet(s){ if (s.type === 'settings') S.guideOpen = false; S.sheet = s; S.sheetAnim = true; renderSheet(true); S.sheetAnim = false; }
+function closeSheet(){ S.sheet = null; $('sheet').innerHTML = ''; }
+function sheetFrame(title, sub, body){
+  return '<div class="sheet-wrap'+(S.sheetAnim?' anim':'')+'" data-a="sheetBg"><div class="sheet"><div class="grab"></div><div class="sheet-h"><h2>'+title+(sub?'<small>'+sub+'</small>':'')+'</h2><button class="ibtn" data-a="sheetClose" aria-label="Chiudi">'+I.x+'</button></div>'+body+'</div></div>';
+}
+function renderSheet(force){
+  const el = $('sheet'); const s = S.sheet;
+  if (!s){ el.innerHTML = ''; return; }
+  const inner = el.querySelector('.sheet');
+  if (!force && inner && isTyping(inner)) return;
+  const sc = inner ? inner.scrollTop : 0;
+  let html = '';
+  if (s.type === 'day') html = sheetDay(s.date);
+  else if (s.type === 'settings') html = sheetSettings();
+  else if (s.type === 'routine') html = sheetRoutine(s);
+  else if (s.type === 'soldiEdit') html = sheetSoldi();
+  else if (s.type === 'dispo') html = sheetDispo(s.id);
+  else if (s.type === 'dpChart') html = sheetDpChart(s.id);
+  else if (s.type === 'task') html = sheetTask(s.id);
+  else if (s.type === 'cat') html = sheetCat(s.id);
+  else if (s.type === 'meteItem') html = sheetMeteItem(s.id);
+  else if (s.type === 'note') html = sheetNote(s);
+  else if (s.type === 'folder') html = sheetFolder(s.id);
+  else if (s.type === 'confirm') html = sheetFrame(esc(s.title), '', '<div class="help" style="font-size:14px;color:var(--ink)">'+esc(s.msg)+'</div><div class="btns"><button class="pill ghost" data-a="sheetClose">Annulla</button><button class="pill '+(s.danger?'danger':'')+'" data-a="confirmOk">'+esc(s.ok)+'</button></div>');
+  else if (s.type === 'progress') html = sheetFrame('Ripristino in corso', '', '<div class="status" style="margin:20px auto"><div class="spin"></div>'+esc(s.msg)+'</div>');
+  el.innerHTML = html;
+  const ni = el.querySelector('.sheet'); if (ni) ni.scrollTop = sc;
+}
+function sheetDay(date){
+  const groups = dayRoutine(date); const doc = S.c.days[date] || {}; const done = new Set(doc.done || []);
+  const st = dayStats(date); const extras = doc.extras || [];
+  const sub = date === today() ? 'Oggi' : date === addDays(today(),1) ? 'Domani' : date === addDays(today(),-1) ? 'Ieri' : '';
+  const flat = groups.flatMap(g => g.items);
+  const placed = extras.filter(e => e.after != null); const loose = extras.filter(e => e.after == null);
+  const eff = e => (e.after === '' || flat.includes(e.after)) ? e.after : '';
+  const extRow = e => chkRow(e.done, 'data-a="extraChk" data-id="'+e.id+'"', e.text, (e.done ? '' : '<button class="act" data-a="extraTomorrow" data-id="'+e.id+'">Domani →</button>') + '<button class="x" data-a="extraDel" data-id="'+e.id+'" aria-label="Elimina">'+I.x+'</button>', 'draggable="true" data-drag="'+e.id+'" data-drop="ext" data-id="'+e.id+'"', e.after != null ? 'ext' : '');
+  const extAt = a => placed.filter(e => eff(e) === a).map(extRow).join('');
+  let b = '<div class="card dropzone" data-zone="routine"><h3>Routine del giorno</h3>'+progress(st.done, st.total);
+  let gi = 0;
+  b += extAt('');
+  groups.forEach(g => {
+    b += '<div class="grp">' + (g.title ? '<div class="grp-t">'+esc(g.title)+'</div>' : '');
+    g.items.forEach(it => {
+      const i = gi++;
+      const canMove = !done.has(it) && postponable(it);
+      b += chkRow(done.has(it), 'data-a="dayChk" data-i="'+i+'"', it, (canMove ? '<button class="act" data-a="rtTomorrow" data-i="'+i+'">Domani →</button>' : '') + '<button class="x more'+(S.rtMenu === i ? ' on' : '')+'" data-a="rtMenu" data-i="'+i+'" aria-label="Opzioni">'+I.dots+'</button>', 'data-drop="rt" data-i="'+i+'"');
+      if (S.rtMenu === i) b += '<div class="rtmenu"><button class="pill ghost" data-a="rtHide" data-i="'+i+'">Togli solo da questo giorno</button><button class="pill danger" data-a="rtDel" data-i="'+i+'">Elimina dalla routine</button></div>';
+      b += extAt(it);
+    });
+    b += '</div>';
+  });
+  if (!groups.length && !placed.length) b += '<div class="empty">Routine vuota per questo giorno.</div>';
+  const hid = doc.hidden || [];
+  b += '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:10px">' + (hid.length ? '<button class="mini" data-a="rtUnhide">↩ Rimetti voci tolte ('+hid.length+')</button>' : '<span></span>') + '<button class="mini" data-a="routineEdit">✏️ Modifica routine</button></div></div>';
+  b += '<div class="card dropzone" data-zone="extras"><h3>Altri impegni<span class="sub">'+(extras.length ? extras.filter(e=>e.done).length+'/'+extras.length : '')+'</span></h3>';
+  loose.forEach(e => { b += extRow(e); });
+  if (loose.length) b += '<div class="help">Puoi trascinarli in mezzo alle voci della routine: col mouse, o dal telefono tenendoli premuti un attimo.</div>';
+  else b += '<div class="help">'+(extras.length ? 'I tuoi impegni sono dentro la routine. Per riportarli qui, trascinali in questo riquadro.' : 'Nessun impegno extra. Aggiungilo qui sotto.')+'</div>';
+  b += '<form class="add" data-f="extraAdd"><input name="t" placeholder="Aggiungi impegno…" autocomplete="off" data-focus="extraAdd"><button aria-label="Aggiungi">'+I.plus+'</button></form></div>';
+  return sheetFrame(cap(fmt(date, {weekday:'long', day:'numeric', month:'long'})), sub, b);
+}
+function guideHTML(){
+  if (!S.guideOpen) return '<button class="card guide-btn" data-a="guideToggle"><span>📖 Istruzioni</span><span class="chev">'+I.chev+'</span></button>';
+  return '<div class="card guide"><button class="guide-btn open" data-a="guideToggle"><span>📖 Istruzioni</span><span class="chev">'+I.chev+'</span></button>' +
+  '<h4>🟢🟠 Il pallino sui tre puntini</h4><ul>' +
+    '<li><span class="dotx" style="background:#10B981"></span><b>Verde</b>: tutto a posto, non devi fare niente.</li>' +
+    '<li><span class="dotx" style="background:#F97316"></span><b>Arancione</b>: c’è qualcosa da fare. Diventa arancione quando devi pulire i fatti, quando è passata più di una settimana dall’ultimo backup, oppure quando dal giorno 10 del mese non hai ancora scritto le cifre del mese per il Portafoglio Louis Vuitton e per BCC + borsello Dior. Pulizia e backup li fai da qui sotto; le cifre nella pagina Soldi (c’è anche un avviso sul calendario con il pulsante “Vai”). Poi torna verde.</li></ul>' +
+  '<h4>⚙️ Cosa fa VF da solo</h4><ul>' +
+    '<li><b>Routine del giorno</b>: ogni giorno riparte pulita, con la versione giusta (ogni giorno da lunedì a venerdì ha la sua, il weekend ne ha una sola).</li>' +
+    '<li><b>Impegni fissi e altri impegni della settimana</b>: le spunte degli impegni fissi si azzerano da sole ogni lunedì, non serve che lo faccia Claude.</li>' +
+    '<li><b>Scorrere le settimane</b>: nella scheda Settimana usa le frecce ‹ › per andare avanti e indietro (da lunedì a domenica) e segnare impegni anche in settimane future. “Torna a questa settimana” ti riporta a oggi.</li>' +
+    '<li><b>Voci automatiche nei giorni</b>: vedi l’elenco qui sotto, “Cosa compare da solo nel calendario”.</li>' +
+    '<li><b>Soldi</b>: le spunte ripartono da zero all’inizio di ogni mese. Per cambiare le voci: ⋯ → Modifica soldi, oppure “Modifica voci” nella pagina Soldi.</li>' +
+    '<li><b>Disposizione soldi</b> (pagina Soldi): accanto a “Cifra” il <b>mese si aggiorna da solo</b> (novembre 2026, dicembre 2026…); il <b>totale di BCC + borsello Dior</b> lo calcola VF sommando le due cifre; sotto ogni cifra segna da solo la <b>data dell’ultimo aggiornamento</b>.</li>' +
+    '<li><b>Storico e grafico</b> (sezioni 3 Portafoglio Louis Vuitton e 4 BCC + borsello Dior): ogni mese ha le sue cifre. Si apre sempre sul mese attuale; con le frecce ‹ › vai avanti e indietro e vedi le cifre di quel mese (“↩ Mese attuale” ti riporta a oggi). “📈 Visualizza grafico” mostra l’andamento mese per mese, con la tabella delle cifre.</li>' +
+    '<li><b>Ore di lavoro</b> (pagina Soldi): la data parte sempre da oggi, e VF calcola da solo il totale ore del mese e quanto fa in euro (10 €/ora). Ogni mese ha il suo totale.</li>' +
+    '<li><b>Calendario</b>: riempie i cerchietti in base a quanta routine hai fatto e mette il puntino arancione nei giorni con impegni extra.</li>' +
+    '<li><b>Categorie</b>: mette in alto quelle con più impegni e aggiorna i cerchietti.</li>' +
+    '<li><b>“+ Settimana”</b>: in Personali e Progetti, accanto a ogni impegno, lo copia nella scheda Settimana (questa settimana) nella stessa categoria. Se hai sbagliato, tocca “↩ Settimana” e lo toglie dalla settimana (in Personali/Progetti resta). Quando lo spunti in un posto, si spunta anche nell’altro.</li>' +
+    '<li><b>Promemoria</b>: ti avvisa sul calendario (e col pallino arancione) se è ora del backup o della pulizia.</li>' +
+    '<li><b>Salvataggio</b>: tutto quello che spunti o aggiungi si salva online subito. Quando modifichi un testo (routine, soldi, fisico, note) premi “Salva”.</li></ul>' +
+  '<h4>📅 Cosa compare da solo nel calendario</h4><ul>' +
+    '<li><b>Una settimana sì e una no</b> (settimane del 23 nov, 7 dic, 21 dic…):<ul>' +
+      '<li><b>Aki</b>: tutti i giorni di quella settimana, weekend compreso.</li>' +
+      '<li><b>Pulizia casa</b>: il sabato di quella settimana, subito dopo colazione (28 nov, 12 dic, 26 dic…).</li></ul></li>' +
+    '<li><b>Nelle settimane opposte</b> (20 nov, 4 dic, 18 dic…): <b>Visione prenotazione capelli Adam</b> il venerdì, subito dopo pranzo.</li>' +
+    '<li><b>Ogni lunedì e mercoledì</b>: Preparo sacca allenamento box (la mattina) e Allenamento box 18–20.</li>' +
+    '<li><b>Ogni venerdì</b>: Rasoio dopo pranzo e Allenamento box 19–21.</li>' +
+    '<li><b>Ogni giovedì e sabato</b>: Allenamento corsa, dopo Aki (o dopo pranzo se Aki non c’è).</li>' +
+    '<li><b>Ogni giovedì</b>: Visione esercizi Giulia marketing, la sera prima di 10 pagine libro.</li>' +
+    '<li><b>Ogni domenica</b>: Organizzo settimana successiva, dopo 10 pagine libro.</li>' +
+    '<li><b>Lunedì–giovedì</b>: Studio 8–17:30 (1:30 pausa). Il martedì niente allenamento.</li>' +
+    '<li>Per cambiarle: ⋯ → Modifica routine. In fondo a una voce, [alterna A] o [alterna B] la fa comparire una settimana sì e una no (A = 16 nov, 30 nov…; B = 23 nov, 7 dic…); [sab], [lun mer] ecc. la limita a quei giorni.</li></ul>' +
+  '<h4>✋ Cosa devi fare tu</h4><ul>' +
+    '<li><b>Ogni settimana, il backup</b>: “Scarica backup” qui sotto. Tieni il file in una cartella tipo “Backup VF” su iCloud Drive o Google Drive. Non aprirlo e non modificarlo: serve solo per il ripristino.</li>' +
+    '<li><b>Quando vuoi, “Pulisci fatti”</b>: toglie gli impegni già spuntati. Finché non lo premi restano lì, barrati. Non parte mai da sola.</li>' +
+    '<li><b>“Domani →”</b> sugli impegni extra non fatti, se vuoi spostarli al giorno dopo. Se li avevi messi dentro la routine, il giorno dopo restano nello stesso punto.</li>' +
+    '<li><b>Dentro un giorno</b>: passa col mouse sopra una voce della routine e tocca ⋯ in fondo a destra. Puoi <b>toglierla solo da quel giorno</b> (poi “↩ Rimetti voci tolte” la riporta) oppure <b>eliminarla dalla routine</b> di tutti quei giorni.</li>' +
+    '<li><b>“Domani →” su Claude lezione finanziaria, Claude lezione analisi 1 e 10 pagine libro</b>: se oggi non riesci, toccalo e la voce sparisce da oggi e domani compare due volte (quella normale + quella rimandata, con scritto “da” e il giorno).</li>' +
+    '<li><b>Trascinare</b>: gli <b>altri impegni</b> si possono trascinare in mezzo alle voci della routine, col mouse o dal telefono (tieni premuto mezzo secondo finché la voce si stacca, poi trascina; vicino al bordo la pagina scorre da sola). Una linea ti mostra dove finiscono. Per riportarli sotto, trascinali nel riquadro “Altri impegni”.</li>' +
+    '<li><b>Spuntare</b> routine, settimana, impegni, mete e voci dei soldi.</li>' +
+    '<li><b>Aggiornare le cifre dei soldi entro il 10 di ogni mese</b> (se no il pallino diventa arancione): VF non sa quanti soldi hai. Nella Disposizione soldi tocca il riquadrino della cifra (Paghetta, Portafoglio Louis Vuitton, Carta BCC e Borsello Dior), scrivi il numero e premi Invio o tocca fuori: si salva da solo. La cifra della carta postale si guarda sull’app Poste. Per cambiare uso, dove si trova o da dove arrivano: “Modifica” sulla sezione.</li>' +
+    '<li><b>Segnare le ore di lavoro</b>: nella pagina Soldi scegli il giorno, scrivi le ore e premi +.</li></ul>' +
+  '<h4>💬 Cosa puoi chiedere a Claude</h4><ul>' +
+    '<li>Apri Claude (anche dal telefono, anche a voce) e scrivi <b>“in VF…”</b> e quello che vuoi. Per esempio:</li>' +
+    '<li class="ex">“in VF segna cena con Marco venerdì alle 20”</li>' +
+    '<li class="ex">“in VF aggiungi a Casa: chiamare l’idraulico”</li>' +
+    '<li class="ex">“in VF cambia la routine del sabato”</li>' +
+    '<li class="ex">“in VF modifica il colore” oppure “aggiungi una sezione”</li>' +
+    '<li>Claude lo inserisce e lo trovi subito qui. Claude non fa niente da solo: lavora solo quando gli scrivi.</li></ul>' +
+  '<h4>🆘 Se qualcosa va storto</h4><ul>' +
+    '<li>Se perdi dati o cancelli qualcosa per sbaglio: “Ripristina backup” qui sotto e scegli l’ultimo file scaricato. VF torna com’era al momento di quel backup.</li></ul>' +
+  '</div>';
+}
+function sheetSettings(){
+  const lb = cfg().lastBackup;
+  let b = guideHTML() + '<div class="card"><h3>📦 Backup</h3><div class="help" style="margin-top:0">'+(lb ? 'Ultimo backup: <b>'+esc(new Date(lb).toLocaleString('it-IT',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}))+'</b>' : 'Non hai ancora scaricato nessun backup.')+'<br>Scaricalo una volta a settimana: è un file con tutti i tuoi dati, da tenere al sicuro (per esempio su Drive).</div>';
+  b += '<div class="btns"><button class="pill" data-a="backupDl">Scarica backup</button><button class="pill ghost" data-a="backupRestore">Ripristina backup</button><button class="pill ghost" data-a="logout">Esci dall’account</button></div></div>';
+  b += '<div class="card"><h3>🔁 Routine e settimana</h3><div class="help" style="margin-top:0">Cambia le voci della routine di ogni giorno (lunedì, martedì, mercoledì, giovedì, venerdì, weekend) e gli impegni fissi della settimana.</div><div class="btns"><button class="pill ghost" data-a="routineEdit">Modifica routine e settimana</button></div></div>';
+  b += '<div class="card"><h3>💵 Soldi</h3><div class="help" style="margin-top:0">Cambia le voci da fare ogni mese nella sezione Soldi.</div><div class="btns"><button class="pill ghost" data-a="soldiEdit">Modifica soldi</button></div></div>';
+  b += '<div class="card"><h3>🧹 Pulisci fatti</h3><div class="help" style="margin-top:0">Toglie tutti gli impegni già spuntati (Settimana, Personali e Progetti). Non parte mai da sola: la fai tu quando vuoi.'+(cfg().lastCleanup ? ' Ultima pulizia: '+esc(new Date(cfg().lastCleanup).toLocaleDateString('it-IT',{day:'numeric',month:'long'}))+'.' : '')+'</div><div class="btns"><button class="pill pink" data-a="cleanDone">Pulisci fatti ('+doneListCount()+')</button></div></div>';
+  return sheetFrame('Istruzioni e impostazioni', '', b);
+}
+function sheetRoutine(s){
+  const r = cfg().routine || {}; const k = s.tab || 'lun';
+  const tabs = [['lun','Lun'],['mar','Mar'],['mer','Mer'],['gio','Gio'],['venerdi','Ven'],['weekend','Sab–Dom'],['week','Fissi']];
+  const val = k === 'week' ? (cfg().week || '') : (r[k] != null ? r[k] : (['lun','mar','mer','gio'].includes(k) ? (r.feriale || '') : ''));
+  let b = '<div class="seg seg7">'+tabs.map(([t,l]) => '<button class="'+(k===t?'on':'')+'" data-a="routineTab" data-t="'+t+'">'+l+'</button>').join('')+'</div>';
+  b += '<textarea class="field" id="routineText" style="min-height:340px" data-focus="routineText">'+esc(val)+'</textarea>';
+  b += k === 'week'
+    ? '<div class="help">Sotto “IMPEGNI FISSI” metti le cose da fare una volta a settimana, una per riga. Aggiungi [alterna] in fondo a una voce per farla comparire una settimana sì e una no ([alterna B] per le settimane opposte).</div>'
+    : '<div class="help">Una voce per riga. Una riga vuota separa i gruppi. Una riga che inizia con # diventa il titolo di un gruppo (es. # NO DIPENDENZE).<br>In fondo a una voce puoi aggiungere: <b>[lun mer]</b> per farla comparire solo in quei giorni (lun mar mer gio ven sab dom); <b>[alterna A]</b> per le settimane del 16 nov, 30 nov… oppure <b>[alterna B]</b> per quelle del 23 nov, 7 dic… Si possono combinare: PULIZIA CASA [sab] [alterna B].</div>';
+  b += '<div class="btns"><button class="pill ghost" data-a="sheetClose">Annulla</button><button class="pill" data-a="routineSave" data-t="'+k+'">Salva</button></div>';
+  return sheetFrame('Modifica routine', '', b);
+}
+function sheetDispo(id){
+  const d = (page('soldi').dispo || []).find(x => x.id === id); if (!d) return '';
+  let b = '<label class="lb">Nome</label><input class="field" style="width:100%" id="dpTitle" value="'+esc(d.title)+'">';
+  if (d.track) b += '<div class="help" style="margin-top:12px">💰 La cifra si cambia direttamente nei riquadrini della sezione, mese per mese (con le frecce ‹ ›).</div>';
+  else {
+  b += '<label class="lb">💰 Cifra '+esc(fmt(today(), {month:'long', year:'numeric'}))+'</label>';
+  if (d.parts) d.parts.forEach((x, i) => { b += '<div style="display:flex;gap:8px;align-items:center;margin-top:6px"><span style="flex:1;font-size:13.5px;font-weight:600">'+esc(x.label)+'</span><input class="field" style="flex:0 0 120px" id="dpPart'+i+'" inputmode="decimal" value="'+esc(x.val == null ? '' : x.val)+'"></div>'; });
+  else b += '<input class="field" style="width:100%" id="dpCifra" value="'+esc(d.cifra || '')+'" placeholder="es. 800">';
+  b += '<div class="help">Scrivi solo il numero (es. 800): il simbolo € lo aggiunge VF. Il mese accanto a “Cifra” si aggiorna da solo.</div>';
+  }
+  [['uso','🎯 Uso'],['dove','📍 Dove si trova'],['fonte','📥 Da dove arrivano']].forEach(([k, l]) => { b += '<label class="lb">'+l+'</label><textarea class="field" style="min-height:64px" id="dp_'+k+'">'+esc(d[k] || '')+'</textarea>'; });
+  b += '<div class="btns"><button class="pill ghost" data-a="sheetClose">Annulla</button><button class="pill" data-a="dispoSave" data-id="'+id+'">Salva</button></div>';
+  return sheetFrame(esc((d.emoji ? d.emoji + ' ' : '') + d.title), '', b);
+}
+function sheetSoldi(){
+  const mon = page('soldi').monthly || [];
+  let b = '<textarea class="field" id="soldiText" style="min-height:260px" data-focus="soldiText">'+esc(mon.map(x => x.text).join('\n'))+'</textarea>';
+  b += '<div class="help">Una voce per riga: sono le cose da fare ogni mese nella sezione Soldi. Le spunte di questo mese restano sulle voci che non cambi.</div>';
+  b += '<div class="btns"><button class="pill ghost" data-a="sheetClose">Annulla</button><button class="pill" data-a="soldiSave">Salva</button></div>';
+  return sheetFrame('Modifica soldi', 'Voci da fare ogni mese', b);
+}
+function catOptions(sel, scope){
+  const groups = scope === 'week' ? [['pers','Personali'],['proj','Progetti']] : [[(cats().find(c=>c.id===sel)||{}).kind || 'pers','']];
+  return groups.map(([k,l]) => (l ? '<optgroup label="'+l+'">' : '') + cats(k).map(c => '<option value="'+c.id+'"'+(c.id===sel?' selected':'')+'>'+esc(c.name)+'</option>').join('') + (l ? '</optgroup>' : '')).join('');
+}
+function sheetTask(id){
+  const t = S.c.tasks[id]; if (!t) return '';
+  let b = '<label class="lb">Impegno</label><input class="field" style="width:100%" id="taskText" value="'+esc(t.text)+'" data-focus="taskText">';
+  b += '<label class="lb">Categoria</label><select class="field" id="taskCat">'+catOptions(t.cat, t.scope)+'</select>';
+  b += '<div class="btns"><button class="pill danger" data-a="taskDel" data-id="'+id+'">Elimina</button><button class="pill" data-a="taskSave" data-id="'+id+'">Salva</button></div>';
+  return sheetFrame('Impegno', '', b);
+}
+function sheetCat(id){
+  const c = cats().find(x => x.id === id); if (!c) return '';
+  let b = '<label class="lb">Nome categoria</label><input class="field" style="width:100%" id="catName" value="'+esc(c.name)+'" data-focus="catName">';
+  b += '<div class="help">Se elimini la categoria, spariscono anche i suoi impegni.</div>';
+  b += '<div class="btns"><button class="pill danger" data-a="catDel" data-id="'+id+'">Elimina</button><button class="pill" data-a="catSave" data-id="'+id+'">Salva</button></div>';
+  return sheetFrame('Categoria', '', b);
+}
+function sheetMeteItem(id){
+  const it = (page('mete').items || []).find(x => x.id === id); if (!it) return '';
+  let b = '<label class="lb">Meta</label><input class="field" style="width:100%" id="meteText" value="'+esc(it.text)+'" data-focus="meteText">';
+  b += '<div class="btns"><button class="pill danger" data-a="meteDel" data-id="'+id+'">Elimina</button><button class="pill" data-a="meteSave" data-id="'+id+'">Salva</button></div>';
+  return sheetFrame('Meta', '', b);
+}
+function sheetNote(s){
+  const n = s.id ? (S.c.notes[s.id] || {}) : {};
+  let b = '<input class="field" style="width:100%;font-weight:700;font-size:16px" id="noteTitle" placeholder="Titolo" value="'+esc(n.title||'')+'" data-focus="noteTitle">';
+  b += '<textarea class="field" id="noteBody" style="margin-top:10px;min-height:320px" placeholder="Scrivi qui…" data-focus="noteBody">'+esc(n.body||'')+'</textarea>';
+  b += '<div class="btns">'+(s.id ? '<button class="pill danger" data-a="noteDel" data-id="'+s.id+'">Elimina</button>' : '<button class="pill ghost" data-a="sheetClose">Annulla</button>')+'<button class="pill" data-a="noteSave">Salva</button></div>';
+  return sheetFrame(s.id ? 'Nota' : 'Nuova nota', '', b);
+}
+function sheetFolder(id){
+  const f = (cfg().noteFolders || []).find(x => x.id === id); if (!f) return '';
+  let b = '<label class="lb">Nome cartella</label><input class="field" style="width:100%" id="folderName" value="'+esc(f.name)+'" data-focus="folderName">';
+  b += '<div class="help">Se elimini la cartella, spariscono anche le sue note.</div>';
+  b += '<div class="btns"><button class="pill danger" data-a="folderDel" data-id="'+id+'">Elimina</button><button class="pill" data-a="folderSave" data-id="'+id+'">Salva</button></div>';
+  return sheetFrame('Cartella', '', b);
+}
+function confirmBox(title, msg, ok, fn, danger){ S.confirmFn = fn; openSheet({type:'confirm', title, msg, ok, danger}); }
+
+/* ---------- backup ---------- */
+function exportData(){
+  const data = {}; COLS.forEach(c => { data[c] = JSON.parse(JSON.stringify(S.c[c])); });
+  return {app:'VF', version:1, exportedAt:new Date().toISOString(), data};
+}
+async function backupDownload(){
+  if (!S.dl){ toast('Il download non è disponibile qui.'); return; }
+  const json = JSON.stringify(exportData(), null, 1);
+  try {
+    await S.dl.save({filename:'VF-backup-'+today()+'.json', data:json});
+    putCfg({lastBackup:new Date().toISOString()});
+    toast('Backup scaricato ✓'); render(true);
+  } catch(e){
+    if (e && e.code === 'declined') toast('Backup annullato.');
+    else if (e && e.code === 'rate_limited') toast('Aspetta un attimo e riprova.');
+    else toast('Non sono riuscito a scaricare il backup.');
+  }
+}
+async function restoreFrom(obj){
+  closeSheet(); S.sheet = {type:'progress', msg:'Preparo…'}; renderSheet(true);
+  let n = 0; const ops = [];
+  COLS.forEach(c => {
+    const incoming = (obj.data && obj.data[c]) || {};
+    Object.keys(S.c[c]).forEach(id => { if (!(id in incoming)) ops.push(['del', c+'/'+id]); });
+    Object.entries(incoming).forEach(([id, d]) => ops.push(['set', c+'/'+id, d]));
+  });
+  try {
+    for (const op of ops){
+      n++; if (n % 5 === 0){ S.sheet.msg = 'Ripristino '+n+' di '+ops.length+'…'; renderSheet(true); }
+      if (op[0] === 'del') await S.db.doc(op[1]).delete(); else await S.db.doc(op[1]).set(op[2]);
+      await new Promise(r => setTimeout(r, 40));
+    }
+    closeSheet(); toast('Backup ripristinato ✓');
+  } catch(e){ console.error(e); closeSheet(); toast('Ripristino interrotto. Riprova: i dati del backup non vanno persi.'); }
+  render(true);
+}
+
+/* ---------- actions ---------- */
+function toggleIn(arr, v){ const s = new Set(arr || []); s.has(v) ? s.delete(v) : s.add(v); return [...s]; }
+function cleanDone(){
+  const ids = Object.entries(S.c.tasks).filter(([,t]) => t.done).map(([id]) => id);
+  if (!ids.length){ putCfg({lastCleanup:new Date().toISOString()}); toast('Niente da pulire ✓'); render(true); return; }
+  confirmBox('Pulisci fatti', 'Tolgo '+ids.length+' impegni già spuntati. Vuoi continuare?', 'Pulisci', () => {
+    ids.forEach(id => del('tasks/'+id)); putCfg({lastCleanup:new Date().toISOString()}); toast('Fatto: '+ids.length+' impegni tolti ✓');
+  });
+}
+const A = {
+  left(){ if (S.view === 'tempo'){ S.side = !S.side; } else { S.view = 'tempo'; S.editPage = null; } render(true); },
+  closeSide(){ S.side = false; render(true); },
+  toggleBottom(){ S.bottom = !S.bottom; render(true); },
+  nav(el){ const v = el.dataset.v; if (v === 'mete'){ S.mete = true; S.meteAnim = true; } else { S.mete = false; S.view = v; S.editPage = null; S.folder = v === 'note' ? S.folder : null; } if (v !== 'tempo') S.side = false; render(true); },
+  closeMete(){ S.mete = false; render(true); },
+  settings(){ openSheet({type:'settings'}); },
+  tab(el){ S.tab = el.dataset.t; S.sideTop = true; lsSet('tab', S.tab); render(true); },
+  calPrev(){ const [y,m] = S.month.split('-').map(Number); S.month = ym(ymd(new Date(y, m-2, 1))); render(true); },
+  calNext(){ const [y,m] = S.month.split('-').map(Number); S.month = ym(ymd(new Date(y, m, 1))); render(true); },
+  calToday(){ S.month = ym(today()); render(true); },
+  openDay(el){ S.rtMenu = null; openSheet({type:'day', date:el.dataset.d}); },
+  rtMenu(el){ const i = +el.dataset.i; S.rtMenu = S.rtMenu === i ? null : i; renderSheet(true); },
+  rtHide(el){
+    const d = S.sheet.date; const it = dayRoutine(d).flatMap(g => g.items)[+el.dataset.i]; if (it == null) return;
+    const doc = Object.assign({done:[], extras:[]}, S.c.days[d]); doc.hidden = (doc.hidden || []).concat([it]); doc.done = (doc.done || []).filter(x => x !== it);
+    put('days/'+d, doc); S.rtMenu = null; toast('Tolto solo da questo giorno'); render(true);
+  },
+  rtTomorrow(el){
+    const d = S.sheet.date; const it = dayRoutine(d).flatMap(g => g.items)[+el.dataset.i]; if (it == null) return; const n = addDays(d, 1);
+    const doc = Object.assign({done:[], extras:[]}, S.c.days[d]); doc.hidden = (doc.hidden || []).concat([it]); doc.done = (doc.done || []).filter(x => x !== it); put('days/'+d, doc);
+    const nd = Object.assign({done:[], extras:[]}, S.c.days[n]); nd.extras = (nd.extras || []).concat([{id:uid(), text: it+' (da '+fmt(d, {weekday:'short', day:'numeric'})+')', done:false, after: it}]); put('days/'+n, nd);
+    toast('Spostato a '+fmt(n, {weekday:'long', day:'numeric'})); render(true);
+  },
+  rtUnhide(){ const d = S.sheet.date; const doc = Object.assign({done:[], extras:[]}, S.c.days[d]); doc.hidden = []; put('days/'+d, doc); toast('Voci rimesse ✓'); render(true); },
+  rtDel(el){
+    const d = S.sheet.date; const it = dayRoutine(d).flatMap(g => g.items)[+el.dataset.i]; if (it == null) return;
+    const k = routineKey(d); const r = cfg().routine || {}; const txt = r[k] != null ? r[k] : (r.feriale || '');
+    const lines = txt.split('\n'); const idx = lines.findIndex(l => l.trim() && !l.trim().startsWith('#') && stripTags(l) === it);
+    if (idx < 0){ toast('Non trovo questa voce nella routine.'); return; }
+    const label = k === 'weekend' ? 'del weekend (sabato e domenica)' : 'di ogni ' + DAYS_IT[parseD(d).getDay()].toLowerCase();
+    const back = S.sheet; S.rtMenu = null;
+    confirmBox('Elimina dalla routine', 'Tolgo “'+it+'” dalla routine '+label+'?', 'Elimina', () => {
+      lines.splice(idx, 1); putCfg({routine: Object.assign({}, cfg().routine, {[k]: lines.join('\n')})}); toast('Eliminato dalla routine ✓'); S.sheet = back;
+    }, true);
+  },
+  dayChk(el){
+    const d = S.sheet.date; const items = dayRoutine(d).flatMap(g => g.items); const it = items[+el.dataset.i]; if (it == null) return;
+    const doc = Object.assign({done:[], extras:[]}, S.c.days[d]); doc.done = toggleIn(doc.done, it); put('days/'+d, doc); render(true);
+  },
+  extraChk(el){ const d = S.sheet.date; const doc = Object.assign({done:[], extras:[]}, S.c.days[d]); doc.extras = doc.extras.map(e => e.id === el.dataset.id ? Object.assign({}, e, {done:!e.done}) : e); put('days/'+d, doc); render(true); },
+  extraDel(el){ const d = S.sheet.date; const doc = Object.assign({done:[], extras:[]}, S.c.days[d]); doc.extras = doc.extras.filter(e => e.id !== el.dataset.id); put('days/'+d, doc); render(true); },
+  extraTomorrow(el){
+    const d = S.sheet.date; const n = addDays(d, 1);
+    const doc = Object.assign({done:[], extras:[]}, S.c.days[d]); const it = doc.extras.find(e => e.id === el.dataset.id); if (!it) return;
+    doc.extras = doc.extras.filter(e => e.id !== it.id); put('days/'+d, doc);
+    const nd = Object.assign({done:[], extras:[]}, S.c.days[n]); nd.extras = (nd.extras || []).concat([Object.assign({id:it.id, text:it.text, done:false}, it.after != null ? {after:it.after} : {})]); put('days/'+n, nd);
+    toast('Spostato a '+fmt(n, {weekday:'long', day:'numeric'})); render(true);
+  },
+  weekChk(el){
+    const w = parseWeek(cfg().week); const k = el.dataset.k; const ws = viewWeek();
+    const list = k === 'fix' ? visibleItems(w.fixed, ws) : ((weekGroups(w, ws).find(g => String(g.k) === k) || {}).items || []); const it = list[+el.dataset.i]; if (!it) return;
+    const doc = Object.assign({done:[]}, S.c.weeks[ws]); doc.done = toggleIn(doc.done, k+'|'+it.text); put('weeks/'+ws, doc); render(true);
+  },
+  catToggle(el){ const k = el.dataset.k; S.openCat[k] = !S.openCat[k]; lsSet('openCat', S.openCat); render(true); },
+  taskChk(el){
+    const id = el.dataset.id; const t = S.c.tasks[id]; if (!t) return; const done = !t.done; const patch = {done, doneAt: done ? Date.now() : null};
+    put('tasks/'+id, Object.assign({}, t, patch));
+    /* tieni allineati originale (Personali/Progetti) e copia in Settimana */
+    if (t.fromId && S.c.tasks[t.fromId]) put('tasks/'+t.fromId, Object.assign({}, S.c.tasks[t.fromId], patch));
+    Object.entries(S.c.tasks).forEach(([cid, c]) => { if (c.fromId === id && cid !== id) put('tasks/'+cid, Object.assign({}, c, patch)); });
+    render(true);
+  },
+  taskToWeek(el){
+    const id = el.dataset.id; const t = S.c.tasks[id]; if (!t) return;
+    const ex = weekCopyOf(id);
+    if (ex){ del('tasks/'+ex[0]); toast('Tolto dalla settimana ↩'); render(true); return; }
+    const ws = weekStart();
+    put('tasks/'+uid(), {text:t.text, cat:t.cat, scope:'week', week:ws, fromId:id, done:false, doneAt:null, createdAt:Date.now()});
+    S.openCat['week:'+t.cat] = true; lsSet('openCat', S.openCat);
+    const c = cats().find(x => x.id === t.cat);
+    toast('Aggiunto alla settimana'+(c ? ' in “'+c.name+'”' : '')+' ✓'); render(true);
+  },
+  taskEdit(el){ openSheet({type:'task', id:el.dataset.id}); },
+  taskSave(el){ const id = el.dataset.id; const t = S.c.tasks[id]; const text = $('taskText').value.trim(); if (!t || !text) return; put('tasks/'+id, Object.assign({}, t, {text, cat:$('taskCat').value})); closeSheet(); render(true); },
+  taskDel(el){ del('tasks/'+el.dataset.id); closeSheet(); render(true); },
+  catEdit(el){ openSheet({type:'cat', id:el.dataset.id}); },
+  catSave(el){ const name = $('catName').value.trim(); if (!name) return; putCfg({cats: cats().map(c => c.id === el.dataset.id ? Object.assign({}, c, {name}) : c)}); closeSheet(); render(true); },
+  catDel(el){
+    const id = el.dataset.id; const c = cats().find(x => x.id === id);
+    confirmBox('Elimina categoria', 'Elimino “'+(c ? c.name : '')+'” e tutti i suoi impegni?', 'Elimina', () => {
+      Object.entries(S.c.tasks).forEach(([tid, t]) => { if (t.cat === id) del('tasks/'+tid); });
+      putCfg({cats: cats().filter(x => x.id !== id)});
+    }, true);
+  },
+  cleanDone(){ cleanDone(); },
+  weekPrev(){ S.weekView = addDays(viewWeek(), -7); S.sideTop = true; render(true); },
+  weekNext(){ S.weekView = addDays(viewWeek(), 7); S.sideTop = true; render(true); },
+  weekToday(){ S.weekView = null; S.sideTop = true; render(true); },
+  guideToggle(){ S.guideOpen = !S.guideOpen; renderSheet(true); },
+  fixedDel(el){
+    const w = parseWeek(cfg().week); const it = w.fixed[+el.dataset.i]; if (it == null) return;
+    confirmBox('Elimina impegno fisso', 'Tolgo “'+it+'” dagli impegni fissi di ogni settimana?', 'Elimina', () => { w.fixed.splice(+el.dataset.i, 1); putCfg({week: weekToText(w)}); }, true);
+  },
+  backupDl(){ backupDownload(); },
+  logout(){ confirmBox('Esci', 'Esco dall’account su questo dispositivo. I dati restano salvati: per rivederli basta riaccedere.', 'Esci', () => window.vfLogout && window.vfLogout()); },
+  backupRestore(){ $('restoreFile').value = ''; $('restoreFile').click(); },
+  routineEdit(){ const d = parseD(S.sheet && S.sheet.date ? S.sheet.date : today()).getDay(); openSheet({type:'routine', tab: d === 5 ? 'venerdi' : (d === 0 || d === 6) ? 'weekend' : WD_KEYS[d], back:S.sheet}); },
+  routineTab(el){ S.sheet.tab = el.dataset.t; renderSheet(true); },
+  routineSave(el){
+    const k = el.dataset.t; const v = $('routineText').value;
+    if (k === 'week') putCfg({week:v}); else putCfg({routine: Object.assign({}, cfg().routine, {[k]:v})});
+    toast('Salvato ✓'); const back = S.sheet.back; S.sheet = back && back.type === 'day' ? back : null; render(true);
+  },
+  meteChk(el){ const items = (page('mete').items || []).map(x => x.id === el.dataset.id ? Object.assign({}, x, {done:!x.done}) : x); putPage('mete', {items}); render(true); },
+  meteEdit(el){ openSheet({type:'meteItem', id:el.dataset.id}); },
+  meteSave(el){ const text = $('meteText').value.trim(); if (!text) return; putPage('mete', {items:(page('mete').items||[]).map(x => x.id === el.dataset.id ? Object.assign({}, x, {text}) : x)}); closeSheet(); render(true); },
+  meteDel(el){ putPage('mete', {items:(page('mete').items||[]).filter(x => x.id !== el.dataset.id)}); closeSheet(); render(true); },
+  hoursPrev(){ const [y,m] = (S.hoursMonth || ym(today())).split('-').map(Number); S.hoursMonth = ym(ymd(new Date(y, m-2, 1))); render(true); },
+  hoursNext(){ const [y,m] = (S.hoursMonth || ym(today())).split('-').map(Number); S.hoursMonth = ym(ymd(new Date(y, m, 1))); render(true); },
+  hoursDel(el){ const id = el.dataset.id; confirmBox('Elimina ore', 'Vuoi togliere queste ore?', 'Elimina', () => putPage('soldi', {hours:(page('soldi').hours || []).filter(x => x.id !== id)}), true); },
+  dpPrev(el){ S.dpMonth = S.dpMonth || {}; const id = el.dataset.id; const [y, mm] = (S.dpMonth[id] || ym(today())).split('-').map(Number); S.dpMonth[id] = ym(ymd(new Date(y, mm-2, 1))); render(true); },
+  dpNext(el){ S.dpMonth = S.dpMonth || {}; const id = el.dataset.id; const [y, mm] = (S.dpMonth[id] || ym(today())).split('-').map(Number); S.dpMonth[id] = ym(ymd(new Date(y, mm, 1))); render(true); },
+  dpNow(el){ if (S.dpMonth) delete S.dpMonth[el.dataset.id]; render(true); },
+  dpChart(el){ openSheet({type:'dpChart', id:el.dataset.id}); },
+  dispoEdit(el){ openSheet({type:'dispo', id:el.dataset.id}); },
+  dispoSave(el){
+    const id = el.dataset.id;
+    const list = (page('soldi').dispo || []).map(d => {
+      if (d.id !== id) return d;
+      const n = Object.assign({}, d, {title: $('dpTitle').value.trim() || d.title, uso: $('dp_uso').value.trim(), dove: $('dp_dove').value.trim(), fonte: $('dp_fonte').value.trim(), upd: today()});
+      if (d.track){} else if (d.parts) n.parts = d.parts.map((x, i) => { const v = String($('dpPart'+i).value).trim().replace(',', '.'); return Object.assign({}, x, {val: v === '' ? null : (isNaN(+v) ? v : +v)}); });
+      else n.cifra = $('dpCifra').value.trim();
+      return n;
+    });
+    putPage('soldi', {dispo: list}); closeSheet(); toast('Salvato ✓'); render(true);
+  },
+  soldiEdit(){ openSheet({type:'soldiEdit'}); },
+  soldiSave(){
+    const old = page('soldi').monthly || []; const used = new Set();
+    const monthly = $('soldiText').value.split('\n').map(l => l.trim().replace(/^[-•]\s*/, '')).filter(Boolean).map(text => {
+      const m = old.find(x => x.text === text && !used.has(x.id)); if (m){ used.add(m.id); return {id:m.id, text}; } return {id:uid(), text};
+    });
+    putPage('soldi', {monthly}); closeSheet(); toast('Salvato ✓'); render(true);
+  },
+  soldiChk(el){ const p = page('soldi'); const mk = ym(today()); const checks = Object.assign({}, p.checks); checks[mk] = toggleIn(checks[mk], el.dataset.id); putPage('soldi', {checks}); render(true); },
+  pageEdit(el){ S.editPage = el.dataset.k; render(true); const t = $('pageText'); if (t) t.focus(); },
+  pageCancel(){ S.editPage = null; render(true); },
+  pageSave(el){ putPage(el.dataset.k, {body:$('pageText').value}); S.editPage = null; toast('Salvato ✓'); render(true); },
+  fisTab(el){ S.fisTab = el.dataset.t; S.editPage = null; render(true); },
+  folderOpen(el){ S.folder = el.dataset.id; render(true); },
+  folderBack(){ S.folder = null; render(true); },
+  folderEdit(el){ openSheet({type:'folder', id:el.dataset.id}); },
+  folderSave(el){ const name = $('folderName').value.trim(); if (!name) return; putCfg({noteFolders:(cfg().noteFolders||[]).map(f => f.id === el.dataset.id ? Object.assign({}, f, {name}) : f)}); closeSheet(); render(true); },
+  folderDel(el){
+    const id = el.dataset.id;
+    confirmBox('Elimina cartella', 'Elimino la cartella e tutte le sue note?', 'Elimina', () => {
+      Object.entries(S.c.notes).forEach(([nid, n]) => { if (n.folder === id) del('notes/'+nid); });
+      putCfg({noteFolders:(cfg().noteFolders||[]).filter(f => f.id !== id)}); S.folder = null;
+    }, true);
+  },
+  noteNew(){ openSheet({type:'note', id:null}); },
+  noteOpen(el){ openSheet({type:'note', id:el.dataset.id}); },
+  noteSave(){
+    const title = $('noteTitle').value.trim(); const body = $('noteBody').value;
+    if (!title && !body.trim()){ closeSheet(); return; }
+    const id = S.sheet.id || uid(); const old = S.c.notes[id] || {folder:S.folder};
+    put('notes/'+id, Object.assign({}, old, {title, body, updatedAt:Date.now()})); closeSheet(); toast('Nota salvata ✓'); render(true);
+  },
+  noteDel(el){ const id = el.dataset.id; confirmBox('Elimina nota', 'Vuoi eliminare questa nota?', 'Elimina', () => del('notes/'+id), true); },
+  confirmOk(){ const fn = S.confirmFn; S.confirmFn = null; closeSheet(); if (fn) fn(); render(true); },
+  sheetClose(){ const back = S.sheet && S.sheet.back; S.sheet = back && back.type === 'day' ? back : null; render(true); },
+  sheetBg(el, ev){ if (ev.target === el) A.sheetClose(); }
+};
+document.addEventListener('click', ev => {
+  const el = ev.target.closest('[data-a]'); if (!el) return;
+  const fn = A[el.dataset.a]; if (!fn) return;
+  if (el.dataset.a === 'sheetBg' && ev.target !== el) return;
+  ev.preventDefault(); fn(el, ev);
+});
+document.addEventListener('submit', ev => {
+  const f = ev.target; ev.preventDefault();
+  const inp = f.querySelector('input'); const v = (inp && inp.value || '').trim(); if (!v) return;
+  const focusKey = inp.dataset.focus;
+  const kind = f.dataset.f;
+  if (kind === 'hoursAdd'){
+    const d = f.elements.d.value; const hv = parseFloat(String(f.elements.h.value).replace(',', '.')); const note = (f.elements.n.value || '').trim();
+    if (!d || !(hv > 0)){ toast('Scrivi la data e le ore.'); return; }
+    putPage('soldi', {hours: (page('soldi').hours || []).concat([Object.assign({id:uid(), date:d, h:hv}, note ? {note} : {})])});
+    S.hoursMonth = ym(d); toast('Ore aggiunte ✓'); render(true); return;
+  }
+  if (kind === 'extraAdd'){ const d = S.sheet.date; const doc = Object.assign({done:[], extras:[]}, S.c.days[d]); doc.extras = (doc.extras||[]).concat([{id:uid(), text:v, done:false}]); put('days/'+d, doc); }
+  else if (kind === 'taskAdd'){ put('tasks/'+uid(), Object.assign({text:v, cat:f.dataset.cat, scope:f.dataset.scope, done:false, doneAt:null, createdAt:Date.now()}, f.dataset.scope === 'week' ? {week: viewWeek()} : {})); }
+  else if (kind === 'catAdd'){ const id = 'c'+uid(); putCfg({cats: cats().concat([{id, name:v, kind:f.dataset.kind}])}); S.openCat['list:'+id] = true; }
+  else if (kind === 'fixedAdd'){ const w = parseWeek(cfg().week); w.fixed.push(v); putCfg({week: weekToText(w)}); }
+  else if (kind === 'meteAdd'){ putPage('mete', {items:(page('mete').items||[]).concat([{id:uid(), text:v, done:false}])}); }
+  else if (kind === 'folderAdd'){ putCfg({noteFolders:(cfg().noteFolders||[]).concat([{id:'f'+uid(), name:v}])}); }
+  inp.value = '';
+  render(true);
+  if (focusKey && kind !== 'catAdd' && kind !== 'folderAdd'){ const n = document.querySelector('[data-focus="'+focusKey+'"]'); if (n) n.focus(); }
+});
+$('restoreFile').addEventListener('change', ev => {
+  const file = ev.target.files && ev.target.files[0]; if (!file) return;
+  const r = new FileReader();
+  r.onload = () => {
+    let obj; try { obj = JSON.parse(r.result); } catch(e){ toast('Questo file non è un backup di VF.'); return; }
+    if (!obj || obj.app !== 'VF' || !obj.data){ toast('Questo file non è un backup di VF.'); return; }
+    const when = obj.exportedAt ? new Date(obj.exportedAt).toLocaleString('it-IT', {day:'numeric', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit'}) : '';
+    confirmBox('Ripristina backup', 'Sostituisco tutti i dati attuali con quelli del backup'+(when ? ' del '+when : '')+'. Continuare?', 'Ripristina', () => restoreFrom(obj), true);
+  };
+  r.readAsText(file);
+});
+/* ---------- drag & drop: altri impegni dentro la routine del giorno ---------- */
+let dragId = null;
+function clearDrop(){ document.querySelectorAll('.drop-a,.drop-b,.over').forEach(n => n.classList.remove('drop-a','drop-b','over')); }
+document.addEventListener('dragstart', ev => {
+  const r = ev.target.closest && ev.target.closest('[data-drag]'); if (!r || !S.sheet || S.sheet.type !== 'day') return;
+  dragId = r.dataset.drag; r.classList.add('dragging');
+  try { ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', dragId); } catch(e){}
+});
+document.addEventListener('dragend', () => { dragId = null; clearDrop(); document.querySelectorAll('.dragging').forEach(n => n.classList.remove('dragging')); });
+function dropTarget(ev){
+  if (!dragId || !ev.target.closest) return null;
+  const row = ev.target.closest('[data-drop]');
+  if (row && row.dataset.drag !== dragId){ const rc = row.getBoundingClientRect(); return {row, before: ev.clientY < rc.top + rc.height/2}; }
+  const zone = ev.target.closest('[data-zone]');
+  return zone ? {zone} : null;
+}
+document.addEventListener('dragover', ev => {
+  const t = dropTarget(ev); if (!t) return; ev.preventDefault(); clearDrop();
+  if (t.row) t.row.classList.add(t.before ? 'drop-b' : 'drop-a'); else t.zone.classList.add('over');
+});
+document.addEventListener('drop', ev => {
+  const t = dropTarget(ev); if (!t) return; ev.preventDefault(); clearDrop(); doDrop(t);
+});
+function doDrop(t){
+  const d = S.sheet && S.sheet.date; if (!d) return;
+  const doc = Object.assign({done:[], extras:[]}, S.c.days[d]); const list = (doc.extras || []).slice();
+  const from = list.findIndex(e => e.id === dragId); if (from < 0) return;
+  const it = Object.assign({}, list[from]); list.splice(from, 1);
+  const flat = dayRoutine(d).flatMap(g => g.items);
+  if (t.row && t.row.dataset.drop === 'rt'){
+    const i = +t.row.dataset.i;
+    if (t.before){ it.after = i ? flat[i-1] : ''; list.push(it); } else { it.after = flat[i]; list.unshift(it); }
+  } else if (t.row){
+    const tgt = list.findIndex(e => e.id === t.row.dataset.id); const te = list[tgt] || {};
+    if (te.after != null) it.after = te.after; else delete it.after;
+    list.splice(tgt < 0 ? list.length : (t.before ? tgt : tgt + 1), 0, it);
+  } else if (t.zone.dataset.zone === 'extras'){ delete it.after; list.push(it); }
+  else { it.after = flat.length ? flat[flat.length-1] : ''; list.push(it); }
+  doc.extras = list; dragId = null; put('days/'+d, doc); render(true);
+}
+/* trascinamento col dito (telefono): tieni premuto mezzo secondo, poi trascina */
+(function(){
+  let tm = null, row = null, ghost = null, sx = 0, sy = 0, lx = 0, ly = 0, on = false, sc = null, raf = 0, offY = 0;
+  const scroller = el => { for (let n = el.parentElement; n && n !== document.body; n = n.parentElement){ const o = getComputedStyle(n).overflowY; if ((o === 'auto' || o === 'scroll') && n.scrollHeight > n.clientHeight) return n; } return document.scrollingElement; };
+  const cancel = () => { clearTimeout(tm); tm = null; };
+  const stop = () => { cancel(); on = false; cancelAnimationFrame(raf); if (ghost) ghost.remove(); ghost = null; if (row) row.classList.remove('dragging'); row = null; clearDrop(); dragId = null; document.body.classList.remove('tdrag'); };
+  const target = () => { if (ghost) ghost.style.display = 'none'; const el = document.elementFromPoint(lx, ly); if (ghost) ghost.style.display = ''; return el ? dropTarget({target: el, clientY: ly}) : null; };
+  const mark = () => { clearDrop(); const t = target(); if (t){ if (t.row) t.row.classList.add(t.before ? 'drop-b' : 'drop-a'); else t.zone.classList.add('over'); } };
+  const loop = () => { if (!on) return; const r = sc === document.scrollingElement ? {top: 0, bottom: innerHeight} : sc.getBoundingClientRect(); const e = 70; let v = 0;
+    if (ly < r.top + e) v = -Math.ceil((r.top + e - ly) / 6); else if (ly > r.bottom - e) v = Math.ceil((ly - (r.bottom - e)) / 6);
+    if (v){ sc.scrollTop += v; mark(); } raf = requestAnimationFrame(loop); };
+  document.addEventListener('touchstart', ev => {
+    if (ev.touches.length !== 1) return; const r = ev.target.closest && ev.target.closest('[data-drag]');
+    if (!r || !S.sheet || S.sheet.type !== 'day' || ev.target.closest('button.act,button.x')) return;
+    const p = ev.touches[0]; sx = lx = p.clientX; sy = ly = p.clientY; row = r;
+    tm = setTimeout(() => { tm = null; if (!row) return; on = true; dragId = row.dataset.drag; sc = scroller(row);
+      const rc = row.getBoundingClientRect(); offY = sy - rc.top;
+      ghost = row.cloneNode(true); ghost.className += ' ghost'; ghost.style.cssText = 'position:fixed;left:'+rc.left+'px;top:'+rc.top+'px;width:'+rc.width+'px;z-index:9999;pointer-events:none;background:#fff;border-radius:10px;box-shadow:0 10px 30px rgba(14,80,110,.25);opacity:.95';
+      document.body.appendChild(ghost); row.classList.add('dragging'); document.body.classList.add('tdrag');
+      try { navigator.vibrate && navigator.vibrate(30); } catch(e){}
+      mark(); raf = requestAnimationFrame(loop); }, 450);
+  }, {passive: true});
+  document.addEventListener('touchmove', ev => {
+    if (!row) return; const p = ev.touches[0]; lx = p.clientX; ly = p.clientY;
+    if (!on){ if (Math.abs(lx - sx) > 10 || Math.abs(ly - sy) > 10){ cancel(); row = null; } return; }
+    ev.preventDefault(); ghost.style.top = (ly - offY) + 'px'; mark();
+  }, {passive: false});
+  document.addEventListener('touchend', ev => {
+    if (!row) return; if (!on){ cancel(); row = null; return; }
+    ev.preventDefault(); const t = target(); const id = dragId; stop(); if (t){ dragId = id; doDrop(t); dragId = null; }
+  }, {passive: false});
+  document.addEventListener('touchcancel', () => { if (row) stop(); });
+  document.addEventListener('contextmenu', ev => { if (ev.target.closest && ev.target.closest('[data-drag]') && 'ontouchstart' in window) ev.preventDefault(); });
+})();
+/* cifre della Disposizione soldi modificabili direttamente */
+document.addEventListener('change', ev => {
+  const t = ev.target; if (!t.classList || !t.classList.contains('cin')) return;
+  const v = String(t.value).trim().replace(/\s|€/g, '').replace(',', '.');
+  if (v !== '' && isNaN(+v)){ toast('Scrivi solo un numero, es. 800'); return; }
+  const val = v === '' ? null : +v; const id = t.dataset.dp; const part = t.dataset.part;
+  const list = (page('soldi').dispo || []).map(d => {
+    if (d.id !== id) return d;
+    const n = Object.assign({}, d, {upd: today()});
+    if (d.track){ const m = t.dataset.m || ym(today()); const hist = Object.assign({}, d.hist); if (d.parts){ const arr = trackVals(d, m); arr[+part] = val; hist[m] = arr; } else hist[m] = val; n.hist = hist; }
+    else if (part != null && part !== '' && d.parts) n.parts = d.parts.map((x, i) => i === +part ? Object.assign({}, x, {val}) : x);
+    else n.cifra = val == null ? '' : String(val);
+    return n;
+  });
+  putPage('soldi', {dispo: list}); toast('Cifra salvata ✓'); t.blur(); render(true);
+});
+document.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.classList && ev.target.classList.contains('cin')){ ev.preventDefault(); ev.target.blur(); } });
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape'){ if (S.sheet) A.sheetClose(); else if (S.mete) A.closeMete(); else if (S.side) A.closeSide(); } });
+
+/* ---------- day change & resize ---------- */
+let lastDay = today();
+setInterval(() => { if (today() !== lastDay){ lastDay = today(); render(); } }, 60000);
+
+/* ---------- init ---------- */
+render(true);
+async function init(){
+  const slow = setTimeout(() => { if (S.status === 'loading'){ S.status = 'slow'; render(); } }, 10000);
+  let db = null;
+  try { db = window.claude ? await window.claude.use('db') : null; } catch(e){ db = null; }
+  try { S.dl = window.claude ? await window.claude.use('downloads') : null; } catch(e){ S.dl = null; }
+  if (!db){ clearTimeout(slow); S.status = 'nodb'; render(true); return; }
+  S.db = db;
+  COLS.forEach(c => {
+    db.collection(c).onSnapshot(snap => {
+      const m = {}; snap.docs.forEach(d => { m[d.id] = d.data(); }); S.c[c] = m;
+      if (!snap.metadata.fromCache) S.got[c] = true;
+      if (COLS.every(x => S.got[x])){ clearTimeout(slow); S.status = 'ok'; }
+      else if (S.status === 'loading' && COLS.every(x => S.c[x] !== undefined)) { /* wait */ }
+      render();
+    }, err => { console.error(err); clearTimeout(slow); S.status = 'error'; render(true); });
+  });
+}
+init();
+})();
+</script>
+</body>
+</html>

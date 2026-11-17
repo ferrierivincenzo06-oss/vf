@@ -833,10 +833,11 @@ function renderMete(force){
   h += '<div class="card">'+progress(items.filter(x => x.done).length, items.length);
   const gOrd = METE_GROUPS.concat(items.map(x => x.group || '').filter((g, i, a) => !METE_GROUPS.includes(g) && a.indexOf(g) === i));
   let firstG = true;
-  gOrd.forEach(g => { const gi = items.filter(x => (x.group || '') === g); if (!gi.length) return;
+  gOrd.forEach(g => { const gi = items.filter(x => (x.group || '') === g); const main = METE_GROUPS.includes(g); if (!gi.length && !main) return;
     if (g) h += '<div class="grp-t" style="margin-top:'+(firstG ? '6px' : '18px')+'">'+esc(g)+'</div>'; firstG = false;
-    gi.forEach(x => { h += chkRow(x.done, 'data-a="meteChk" data-id="'+x.id+'"', x.text, '<button class="x" data-a="meteEdit" data-id="'+x.id+'" aria-label="Modifica">'+I.dots+'</button>'); }); });
-  h += '<form class="add" data-f="meteAdd"><input name="t" placeholder="Nuova meta…" autocomplete="off" data-focus="meteAdd"><button aria-label="Aggiungi meta">'+I.plus+'</button></form></div>';
+    gi.forEach(x => { h += chkRow(x.done, 'data-a="meteChk" data-id="'+x.id+'"', x.text, '<button class="x" data-a="meteEdit" data-id="'+x.id+'" aria-label="Modifica">'+I.dots+'</button>'); });
+    if (main) h += '<form class="add" data-f="meteAdd" data-g="'+g+'"><input name="t" placeholder="Nuova meta '+g.toLowerCase()+'…" autocomplete="off" data-focus="meteAdd'+g+'"><button aria-label="Aggiungi meta '+g.toLowerCase()+'">'+I.plus+'</button></form>'; });
+  h += '</div>';
   if ((p.character || []).length) h += '<div class="card"><h3>'+esc(p.characterTitle || 'Obiettivi carattere')+'</h3><ol>'+p.character.map(c => '<li>'+esc(c)+'</li>').join('')+'</ol></div>';
   h += '</div></div>';
   const wrap = el.firstElementChild;
@@ -1288,7 +1289,7 @@ document.addEventListener('submit', ev => {
   else if (kind === 'taskAdd'){ put('tasks/'+uid(), Object.assign({text:v, cat:f.dataset.cat, scope:f.dataset.scope, done:false, doneAt:null, createdAt:Date.now()}, f.dataset.scope === 'week' ? {week: viewWeek()} : {})); }
   else if (kind === 'catAdd'){ const id = 'c'+uid(); putCfg({cats: cats().concat([{id, name:v, kind:f.dataset.kind}])}); S.openCat['list:'+id] = true; }
   else if (kind === 'fixedAdd'){ const w = parseWeek(cfg().week); w.fixed.push(v); putCfg({week: weekToText(w)}); }
-  else if (kind === 'meteAdd'){ const id = uid(); putPage('mete', {items:(page('mete').items||[]).concat([{id, text:v, done:false, group:'Privata'}])}); inp.value = ''; render(true); S.meteGrp = null; openSheet({type:'meteItem', id}); return; }
+  else if (kind === 'meteAdd'){ putPage('mete', {items:(page('mete').items||[]).concat([{id:uid(), text:v, done:false, group:f.dataset.g || 'Privata'}])}); }
   else if (kind === 'folderAdd'){ putCfg({noteFolders:(cfg().noteFolders||[]).concat([{id:'f'+uid(), name:v}])}); }
   inp.value = '';
   render(true);

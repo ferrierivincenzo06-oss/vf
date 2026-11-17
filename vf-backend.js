@@ -139,5 +139,14 @@
     }
   };
 
-  if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  if ('serviceWorker' in navigator){
+    /* aggiornamenti: controlla sempre se c'è una versione nuova e, se arriva, ricarica da sola una volta */
+    let reloaded = false; const hadSW = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (reloaded || !hadSW) return; reloaded = true; location.reload(); });
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js', {updateViaCache: 'none'}).then(reg => {
+      const check = () => reg.update().catch(() => {});
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+      window.addEventListener('focus', check);
+    }).catch(() => {}));
+  }
 })();

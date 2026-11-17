@@ -368,6 +368,7 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7
 const strip = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g,'');
 const fmt = (s, o) => parseD(s).toLocaleDateString('it-IT', o);
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+const METE_GROUPS = ['Professionale', 'Privata'];
 const DAYS_IT = ['DOMENICA','LUNEDÌ','MARTEDÌ','MERCOLEDÌ','GIOVEDÌ','VENERDÌ','SABATO'];
 const WEEK_ORDER = [1,2,3,4,5,6,0];
 function lsGet(k, d){ try { const v = localStorage.getItem('vf_'+k); return v == null ? d : JSON.parse(v); } catch(e){ return d; } }
@@ -830,8 +831,11 @@ function renderMete(force){
   const p = page('mete'); const items = p.items || [];
   let h = '<div class="mete'+(S.meteAnim?' anim':'')+'"><button class="ibtn close" data-a="closeMete" aria-label="Chiudi">'+I.x+'</button><div class="mete-in"><h1>Mete</h1> <span style="font-size:34px">🎯</span><div class="per">'+esc(p.period || '')+'</div>';
   h += '<div class="card">'+progress(items.filter(x => x.done).length, items.length);
-  let lastG = null;
-  items.forEach(x => { const g = x.group || ''; if (g !== lastG){ if (g) h += '<div class="grp-t" style="margin-top:'+(lastG === null ? '6px' : '18px')+'">'+esc(g)+'</div>'; lastG = g; } h += chkRow(x.done, 'data-a="meteChk" data-id="'+x.id+'"', x.text, '<button class="x" data-a="meteEdit" data-id="'+x.id+'" aria-label="Modifica">'+I.dots+'</button>'); });
+  const gOrd = METE_GROUPS.concat(items.map(x => x.group || '').filter((g, i, a) => !METE_GROUPS.includes(g) && a.indexOf(g) === i));
+  let firstG = true;
+  gOrd.forEach(g => { const gi = items.filter(x => (x.group || '') === g); if (!gi.length) return;
+    if (g) h += '<div class="grp-t" style="margin-top:'+(firstG ? '6px' : '18px')+'">'+esc(g)+'</div>'; firstG = false;
+    gi.forEach(x => { h += chkRow(x.done, 'data-a="meteChk" data-id="'+x.id+'"', x.text, '<button class="x" data-a="meteEdit" data-id="'+x.id+'" aria-label="Modifica">'+I.dots+'</button>'); }); });
   h += '<form class="add" data-f="meteAdd"><input name="t" placeholder="Nuova meta…" autocomplete="off" data-focus="meteAdd"><button aria-label="Aggiungi meta">'+I.plus+'</button></form></div>';
   if ((p.character || []).length) h += '<div class="card"><h3>'+esc(p.characterTitle || 'Obiettivi carattere')+'</h3><ol>'+p.character.map(c => '<li>'+esc(c)+'</li>').join('')+'</ol></div>';
   h += '</div></div>';
@@ -1026,7 +1030,9 @@ function sheetCat(id){
 }
 function sheetMeteItem(id){
   const it = (page('mete').items || []).find(x => x.id === id); if (!it) return '';
+  if (S.meteGrp == null) S.meteGrp = it.group || 'Privata';
   let b = '<label class="lb">Meta</label><input class="field" style="width:100%" id="meteText" value="'+esc(it.text)+'" data-focus="meteText">';
+  b += '<label class="lb" style="margin-top:14px">Sezione</label><div class="btns" style="justify-content:flex-start;margin-top:4px">' + METE_GROUPS.map(g => '<button class="pill'+(S.meteGrp === g ? '' : ' ghost')+'" data-a="meteGrp" data-g="'+g+'">'+(S.meteGrp === g ? '✓ ' : '')+g+'</button>').join('') + '</div>';
   b += '<div class="btns"><button class="pill danger" data-a="meteDel" data-id="'+id+'">Elimina</button><button class="pill" data-a="meteSave" data-id="'+id+'">Salva</button></div>';
   return sheetFrame('Meta', '', b);
 }
@@ -1201,8 +1207,9 @@ const A = {
     toast('Salvato ✓'); const back = S.sheet.back; S.sheet = back && back.type === 'day' ? back : null; render(true);
   },
   meteChk(el){ const items = (page('mete').items || []).map(x => x.id === el.dataset.id ? Object.assign({}, x, {done:!x.done}) : x); putPage('mete', {items}); render(true); },
-  meteEdit(el){ openSheet({type:'meteItem', id:el.dataset.id}); },
-  meteSave(el){ const text = $('meteText').value.trim(); if (!text) return; putPage('mete', {items:(page('mete').items||[]).map(x => x.id === el.dataset.id ? Object.assign({}, x, {text}) : x)}); closeSheet(); render(true); },
+  meteEdit(el){ S.meteGrp = null; openSheet({type:'meteItem', id:el.dataset.id}); },
+  meteGrp(el){ const t = $('meteText'); if (t) S.sheet.draft = t.value; S.meteGrp = el.dataset.g; renderSheet(true); const n = $('meteText'); if (n && S.sheet.draft != null) n.value = S.sheet.draft; },
+  meteSave(el){ const text = $('meteText').value.trim(); if (!text) return; putPage('mete', {items:(page('mete').items||[]).map(x => x.id === el.dataset.id ? Object.assign({}, x, {text}, S.meteGrp ? {group:S.meteGrp} : {}) : x)}); S.meteGrp = null; closeSheet(); render(true); },
   meteDel(el){ putPage('mete', {items:(page('mete').items||[]).filter(x => x.id !== el.dataset.id)}); closeSheet(); render(true); },
   hoursPrev(){ const [y,m] = (S.hoursMonth || ym(today())).split('-').map(Number); S.hoursMonth = ym(ymd(new Date(y, m-2, 1))); render(true); },
   hoursNext(){ const [y,m] = (S.hoursMonth || ym(today())).split('-').map(Number); S.hoursMonth = ym(ymd(new Date(y, m, 1))); render(true); },
@@ -1281,7 +1288,7 @@ document.addEventListener('submit', ev => {
   else if (kind === 'taskAdd'){ put('tasks/'+uid(), Object.assign({text:v, cat:f.dataset.cat, scope:f.dataset.scope, done:false, doneAt:null, createdAt:Date.now()}, f.dataset.scope === 'week' ? {week: viewWeek()} : {})); }
   else if (kind === 'catAdd'){ const id = 'c'+uid(); putCfg({cats: cats().concat([{id, name:v, kind:f.dataset.kind}])}); S.openCat['list:'+id] = true; }
   else if (kind === 'fixedAdd'){ const w = parseWeek(cfg().week); w.fixed.push(v); putCfg({week: weekToText(w)}); }
-  else if (kind === 'meteAdd'){ putPage('mete', {items:(page('mete').items||[]).concat([{id:uid(), text:v, done:false}])}); }
+  else if (kind === 'meteAdd'){ const id = uid(); putPage('mete', {items:(page('mete').items||[]).concat([{id, text:v, done:false, group:'Privata'}])}); inp.value = ''; render(true); S.meteGrp = null; openSheet({type:'meteItem', id}); return; }
   else if (kind === 'folderAdd'){ putCfg({noteFolders:(cfg().noteFolders||[]).concat([{id:'f'+uid(), name:v}])}); }
   inp.value = '';
   render(true);

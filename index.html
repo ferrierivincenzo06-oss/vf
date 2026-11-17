@@ -22,7 +22,9 @@
                  week (testo: "LUNEDÌ" ... "DOMENICA", "IMPEGNI FISSI" come intestazioni),
                  cats:[{id,name,kind:'pers'|'proj'}], noteFolders:[{id,name}], lastBackup, lastCleanup }
   days/<YYYY-MM-DD>   { done:[testo voce routine], hidden:[voci routine tolte solo quel giorno],
-                        extras:[{id,text,done, after?:testo voce routine dopo cui sta ('' = in cima); assente = in Altri impegni}] }
+                        extras:[{id,text,done, after?:testo voce routine dopo cui sta ('' = in cima); assente = in Altri impegni}],
+                        note?:testo libero (note del giorno; nel calendario puntino viola),
+                        fill?:true (giorno "riempito" di azzurro nel calendario, es. giorni fuori casa) }
   weeks/<lunedì YYYY-MM-DD> { done:[chiave "giorno|testo" o "fix|testo"] }
   tasks/<id>  { text, cat, scope:'week'|'list', done, doneAt, createdAt, week?, fromId? (copia in settimana di un impegno 'list') }
   pages/mete  { period, items:[{id,text,done}], character:[testo] }
@@ -84,9 +86,28 @@ body.bshow .main{padding-bottom:calc(140px + var(--sb))}
 .day.today .rw{background:var(--grad);border-radius:50%;color:#fff}
 .day.today .rw svg circle.bg{stroke:rgba(255,255,255,.35)}
 .day.today .rw svg circle.fg{stroke:#fff}
+.day.fill{background:linear-gradient(135deg,#38BDF8,#0EA5C9 55%,#14C2A8);color:#fff;box-shadow:0 4px 12px rgba(14,165,201,.25)}
+.day.fill:hover{background:linear-gradient(135deg,#38BDF8,#0EA5C9 55%,#14C2A8);filter:brightness(1.05)}
+.day.fill .rw svg circle.bg{stroke:rgba(255,255,255,.35)}
+.day.fill .rw svg circle.fg{stroke:#fff}
+.day.fill.today .rw{background:rgba(255,255,255,.25)}
+.day.fill .dots{background:rgba(255,255,255,.9);border-radius:6px;padding:0 2px;height:8px;align-items:center}
+.day.fill .dots:empty{background:none}
+.dayfill{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:var(--soft);border-radius:14px;padding:10px 12px;margin-bottom:12px;color:#0E7FA0;font-weight:700;font-size:14px}
+.dayfill .sq{width:22px;height:22px;border-radius:7px;border:2px solid #0EA5C9;display:grid;place-items:center;flex:none;background:#fff}
+.dayfill.on .sq{background:linear-gradient(135deg,#38BDF8,#0EA5C9 55%,#14C2A8);border-color:transparent;color:#fff}
+.dayfill .sq svg{width:14px;height:14px}
+.dayfill .pv{flex:1;font-weight:500;color:#5C8B99;font-size:12.5px}
+.day .dots{display:flex;gap:3px;height:6px}
 .day .dot{width:6px;height:6px;border-radius:50%;background:var(--coral)}
-.day .dot.none{background:transparent}
-.legend{display:flex;gap:14px;justify-content:center;font-size:11.5px;color:var(--muted);padding-top:10px}
+.day .dot.nt{background:#8B5CF6}
+.daynote{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:#F5F1FF;border-radius:14px;padding:10px 12px;margin-bottom:12px;color:#5B3FD1;font-weight:700;font-size:14px}
+.daynote .pv{flex:1;min-width:0;font-weight:500;color:#6B5A9E;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.daynote .pd{width:8px;height:8px;border-radius:50%;background:#8B5CF6;flex:none}
+.daynote-card{background:#F5F1FF;border-radius:16px;padding:12px;margin-bottom:12px}
+.daynote-card h3{color:#5B3FD1;margin:0 0 8px;font-size:15px}
+.daynote-card textarea{min-height:130px;background:#fff}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;justify-content:center;font-size:11.5px;color:var(--muted);padding-top:10px}
 .legend span{display:flex;align-items:center;gap:5px}
 .legend i{width:8px;height:8px;border-radius:50%;display:inline-block}
 /* sidebar */
@@ -129,13 +150,20 @@ body.bshow .main{padding-bottom:calc(140px + var(--sb))}
 .chk .x svg{width:16px;height:16px}
 .chk .more{opacity:1}
 .chk.ext{background:#FFF6E8;border-radius:10px;padding-left:6px;padding-right:4px;margin:2px -6px}
-.chk[draggable="true"]{cursor:grab}
-.chk.drop-b{box-shadow:inset 0 3px 0 var(--violet)}
-.chk.drop-a{box-shadow:inset 0 -3px 0 var(--violet)}
-.dropzone.over{outline:2px dashed var(--violet);outline-offset:2px}
-.chk.dragging{opacity:.35}
-.chk[draggable="true"]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
-body.tdrag{-webkit-user-select:none;user-select:none;overflow:hidden}
+.chk[data-drag]{cursor:grab;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-user-drag:none;transition:background .2s,transform .2s}
+.chk .grip{flex:none;width:30px;height:30px;margin:-2px -4px -2px -2px;border-radius:8px;display:grid;place-items:center;color:#9BB3BC;cursor:grab;touch-action:none;-webkit-touch-callout:none}
+.chk .grip svg{width:18px;height:18px}
+.chk .grip:active{background:var(--soft);color:var(--violet)}
+.chk[data-drag].pressing{background:var(--soft);transform:scale(.985);border-radius:10px}
+.chk{position:relative}
+.chk.drop-b::before,.chk.drop-a::after{content:'';position:absolute;left:-4px;right:-4px;height:4px;border-radius:4px;background:var(--violet);box-shadow:0 0 0 3px rgba(255,255,255,.9);z-index:2;pointer-events:none}
+.chk.drop-b::before{top:-3px}
+.chk.drop-a::after{bottom:-3px}
+body.tdrag .dropzone{outline:2px dashed var(--line);outline-offset:2px}
+.dropzone.over,body.tdrag .dropzone.over{outline:2px dashed var(--violet);outline-offset:2px;background:rgba(10,159,196,.05)}
+.chk.dragging{opacity:.3}
+body.tdrag{-webkit-user-select:none;user-select:none;overflow:hidden;cursor:grabbing}
+body.tdrag *{cursor:grabbing!important}
 .rtmenu{display:flex;gap:8px;flex-wrap:wrap;padding:2px 0 8px 34px}
 .rtmenu .pill{padding:7px 12px;font-size:12.5px}
 .grp + .grp{margin-top:6px;padding-top:6px;border-top:2px dashed var(--line)}
@@ -306,6 +334,7 @@ select.field{width:100%;appearance:none}
 const I = {
   menu:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h10M4 17h16"/></svg>',
   back:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+  grip:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.8"/><circle cx="15" cy="6" r="1.8"/><circle cx="9" cy="12" r="1.8"/><circle cx="15" cy="12" r="1.8"/><circle cx="9" cy="18" r="1.8"/><circle cx="15" cy="18" r="1.8"/></svg>',
   dots:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
   x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
@@ -441,7 +470,7 @@ function dayRoutine(date){
 }
 /* voci della routine con il pulsante "Domani →" (config/main.postpone, altrimenti queste) */
 const POSTPONE_DEF = ['CLAUDE LEZIONE FINANZIARIA', 'CLAUDE LEZIONE ANALISI 1', '10 PAGINE LIBRO'];
-function postponable(t){ const list = cfg().postpone || POSTPONE_DEF; const n = strip(String(t).toUpperCase()).trim(); return list.some(x => strip(String(x).toUpperCase()).trim() === n); }
+function postponable(t){ const list = cfg().postpone || POSTPONE_DEF; const k = x => strip(String(x).toUpperCase()).replace(/\s*\([^)]*\)\s*$/, '').trim(); const n = k(t); return list.some(x => k(x) === n); }
 function routineKey(date){ const d = parseD(date).getDay(); return d === 5 ? 'venerdi' : (d === 0 || d === 6) ? 'weekend' : WD_KEYS[d]; }
 function stripTags(raw){
   let s = String(raw).trim().replace(/^[-•]\s*/,''), m;
@@ -456,7 +485,7 @@ function dayStats(date){
   const items = dayRoutine(date).flatMap(g => g.items);
   const doc = S.c.days[date] || {};
   const done = (doc.done || []).filter(t => items.includes(t)).length;
-  return {total: items.length, done, frac: items.length ? done/items.length : 0, extras: (doc.extras || []).length, extrasOpen: (doc.extras||[]).filter(e => !e.done).length};
+  return {total: items.length, done, frac: items.length ? done/items.length : 0, extras: (doc.extras || []).length, extrasOpen: (doc.extras||[]).filter(e => !e.done).length, note: !!String(doc.note || '').trim()};
 }
 function parseWeek(txt){
   const days = {}; const fixed = []; let cur = null;
@@ -591,9 +620,9 @@ function renderCalendar(){
     const out = ym(d) !== S.month; const isT = d === t;
     const showRing = d <= t || st.done > 0;
     const col = st.frac >= 1 ? '#10B981' : '#0EA5C9';
-    h += '<button class="day'+(out?' out':'')+(isT?' today':'')+'" data-a="openDay" data-d="'+d+'"><span class="rw">'+(showRing ? ring(st.frac, col, 40) : '')+'<span class="n">'+parseD(d).getDate()+'</span></span><span class="dot'+(st.extras ? '' : ' none')+'"></span></button>';
+    h += '<button class="day'+(out?' out':'')+(isT?' today':'')+((S.c.days[d] || {}).fill ? ' fill' : '')+'" data-a="openDay" data-d="'+d+'"><span class="rw">'+(showRing ? ring(st.frac, col, 40) : '')+'<span class="n">'+parseD(d).getDate()+'</span></span><span class="dots">'+(st.extras ? '<span class="dot"></span>' : '')+(st.note ? '<span class="dot nt"></span>' : '')+'</span></button>';
   }
-  h += '</div><div class="legend"><span><i style="background:var(--violet)"></i>Routine fatta</span><span><i style="background:var(--coral)"></i>Impegni extra</span></div></div>';
+  h += '</div><div class="legend"><span><i style="background:var(--violet)"></i>Routine fatta</span><span><i style="background:var(--coral)"></i>Impegni extra</span><span><i style="background:#8B5CF6"></i>Note</span><span><i style="background:#0EA5C9;border-radius:3px"></i>Giorno riempito</span></div></div>';
   return h;
 }
 
@@ -818,6 +847,7 @@ function sheetFrame(title, sub, body){
   return '<div class="sheet-wrap'+(S.sheetAnim?' anim':'')+'" data-a="sheetBg"><div class="sheet"><div class="grab"></div><div class="sheet-h"><h2>'+title+(sub?'<small>'+sub+'</small>':'')+'</h2><button class="ibtn" data-a="sheetClose" aria-label="Chiudi">'+I.x+'</button></div>'+body+'</div></div>';
 }
 function renderSheet(force){
+  if (S.dragging && (document.body.classList.contains('tdrag') || Date.now() - S.dragging < 1500)){ S.dragPending = true; return; }
   const el = $('sheet'); const s = S.sheet;
   if (!s){ el.innerHTML = ''; return; }
   const inner = el.querySelector('.sheet');
@@ -847,9 +877,14 @@ function sheetDay(date){
   const flat = groups.flatMap(g => g.items);
   const placed = extras.filter(e => e.after != null); const loose = extras.filter(e => e.after == null);
   const eff = e => (e.after === '' || flat.includes(e.after)) ? e.after : '';
-  const extRow = e => chkRow(e.done, 'data-a="extraChk" data-id="'+e.id+'"', e.text, (e.done ? '' : '<button class="act" data-a="extraTomorrow" data-id="'+e.id+'">Domani →</button>') + '<button class="x" data-a="extraDel" data-id="'+e.id+'" aria-label="Elimina">'+I.x+'</button>', 'draggable="true" data-drag="'+e.id+'" data-drop="ext" data-id="'+e.id+'"', e.after != null ? 'ext' : '');
+  const extRow = e => chkRow(e.done, 'data-a="extraChk" data-id="'+e.id+'"', e.text, (e.done ? '' : '<button class="act" data-a="extraTomorrow" data-id="'+e.id+'">Domani →</button>') + '<button class="x" data-a="extraDel" data-id="'+e.id+'" aria-label="Elimina">'+I.x+'</button><span class="grip" aria-label="Trascina">'+I.grip+'</span>', 'data-drag="'+e.id+'" data-drop="ext" data-id="'+e.id+'"', e.after != null ? 'ext' : '');
   const extAt = a => placed.filter(e => eff(e) === a).map(extRow).join('');
-  let b = '<div class="card dropzone" data-zone="routine"><h3>Routine del giorno</h3>'+progress(st.done, st.total);
+  const note = String(doc.note || '');
+  let b = '';
+  if (S.dayNote) b += '<div class="daynote-card"><h3>📝 Note del giorno</h3><textarea class="field" id="dayNoteText" data-focus="dayNote" placeholder="Scrivi qui le note di questo giorno…">'+esc(note)+'</textarea><div class="btns"><button class="pill ghost" data-a="dayNoteCancel">Annulla</button><button class="pill" data-a="dayNoteSave">Salva</button></div></div>';
+  else b += '<button class="daynote" data-a="dayNoteOpen">📝 Note'+(note.trim() ? '<span class="pv">'+esc(note.trim().split('\n')[0])+'</span><span class="pd"></span>' : '<span class="pv">Tocca per scrivere</span>')+'</button>';
+  b += '<button class="dayfill'+(doc.fill ? ' on' : '')+'" data-a="dayFill"><span class="sq">'+(doc.fill ? I.check : '')+'</span>Riempi giorno<span class="pv">'+(doc.fill ? 'Colorato nel calendario' : 'Colora questo giorno nel calendario')+'</span></button>';
+  b += '<div class="card dropzone" data-zone="routine"><h3>Routine del giorno</h3>'+progress(st.done, st.total);
   let gi = 0;
   b += extAt('');
   groups.forEach(g => {
@@ -868,7 +903,7 @@ function sheetDay(date){
   b += '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:10px">' + (hid.length ? '<button class="mini" data-a="rtUnhide">↩ Rimetti voci tolte ('+hid.length+')</button>' : '<span></span>') + '<button class="mini" data-a="routineEdit">✏️ Modifica routine</button></div></div>';
   b += '<div class="card dropzone" data-zone="extras"><h3>Altri impegni<span class="sub">'+(extras.length ? extras.filter(e=>e.done).length+'/'+extras.length : '')+'</span></h3>';
   loose.forEach(e => { b += extRow(e); });
-  if (loose.length) b += '<div class="help">Puoi trascinarli in mezzo alle voci della routine: col mouse, o dal telefono tenendoli premuti un attimo.</div>';
+  if (loose.length) b += '<div class="help">Trascinali in mezzo alle voci della routine con la maniglia ⠿ a destra.</div>';
   else b += '<div class="help">'+(extras.length ? 'I tuoi impegni sono dentro la routine. Per riportarli qui, trascinali in questo riquadro.' : 'Nessun impegno extra. Aggiungilo qui sotto.')+'</div>';
   b += '<form class="add" data-f="extraAdd"><input name="t" placeholder="Aggiungi impegno…" autocomplete="off" data-focus="extraAdd"><button aria-label="Aggiungi">'+I.plus+'</button></form></div>';
   return sheetFrame(cap(fmt(date, {weekday:'long', day:'numeric', month:'long'})), sub, b);
@@ -888,7 +923,9 @@ function guideHTML(){
     '<li><b>Disposizione soldi</b> (pagina Soldi): accanto a “Cifra” il <b>mese si aggiorna da solo</b> (novembre 2026, dicembre 2026…); il <b>totale di BCC + borsello Dior</b> lo calcola VF sommando le due cifre; sotto ogni cifra segna da solo la <b>data dell’ultimo aggiornamento</b>.</li>' +
     '<li><b>Storico e grafico</b> (sezioni 3 Portafoglio Louis Vuitton e 4 BCC + borsello Dior): ogni mese ha le sue cifre. Si apre sempre sul mese attuale; con le frecce ‹ › vai avanti e indietro e vedi le cifre di quel mese (“↩ Mese attuale” ti riporta a oggi). “📈 Visualizza grafico” mostra l’andamento mese per mese, con la tabella delle cifre.</li>' +
     '<li><b>Ore di lavoro</b> (pagina Soldi): la data parte sempre da oggi, e VF calcola da solo il totale ore del mese e quanto fa in euro (10 €/ora). Ogni mese ha il suo totale.</li>' +
-    '<li><b>Calendario</b>: riempie i cerchietti in base a quanta routine hai fatto e mette il puntino arancione nei giorni con impegni extra.</li>' +
+    '<li><b>Calendario</b>: riempie i cerchietti in base a quanta routine hai fatto e mette il puntino arancione nei giorni con impegni extra e quello viola nei giorni con delle note.</li>' +
+    '<li><b>Riempi giorno</b>: dentro un giorno spunta il quadratino “Riempi giorno” e nel calendario quel giorno diventa tutto azzurro (es. giorni fuori casa). Rispunta per toglierlo.</li>' +
+    '<li><b>Note del giorno</b>: in cima a ogni giorno c’è il riquadro “📝 Note”. Toccalo per scrivere, poi “Salva”.</li>' +
     '<li><b>Categorie</b>: mette in alto quelle con più impegni e aggiorna i cerchietti.</li>' +
     '<li><b>“+ Settimana”</b>: in Personali e Progetti, accanto a ogni impegno, lo copia nella scheda Settimana (questa settimana) nella stessa categoria. Se hai sbagliato, tocca “↩ Settimana” e lo toglie dalla settimana (in Personali/Progetti resta). Quando lo spunti in un posto, si spunta anche nell’altro.</li>' +
     '<li><b>Promemoria</b>: ti avvisa sul calendario (e col pallino arancione) se è ora della pulizia.</li><li><b>Backup automatico ogni domenica (verso le 20:40)</b>: Claude copia da solo tutti i tuoi dati in un nuovo file nella cartella <b>“VF Backup”</b> del tuo Google Drive (drive.google.com → Il mio Drive → VF Backup; dal telefono app Google Drive → File → Il mio Drive → VF Backup) e ti manda una <b>notifica sul telefono dall’app Claude</b> (“Backup VF fatto ✓”). Ogni settimana si aggiunge un file nuovo con la data; i vecchi restano. Così il database viene usato almeno una volta a settimana e non va mai in pausa, nemmeno se non apri VF.</li><li><b>Mac e iPhone sincronizzati</b>: quello che scrivi su uno compare sull’altro in pochi secondi. I dati stanno online (Supabase), non nel dispositivo.</li><li><b>Accesso</b>: email e password le metti una volta sola per dispositivo (Mac e iPhone). Te le richiede solo se premi “Esci dall’account”, se cancelli l’app o se cancelli i dati di Safari: i dati non si perdono mai, rientri e ritrovi tutto.</li>' +
@@ -911,7 +948,7 @@ function guideHTML(){
     '<li><b>“Domani →”</b> sugli impegni extra non fatti, se vuoi spostarli al giorno dopo. Se li avevi messi dentro la routine, il giorno dopo restano nello stesso punto.</li>' +
     '<li><b>Dentro un giorno</b>: passa col mouse sopra una voce della routine e tocca ⋯ in fondo a destra. Puoi <b>toglierla solo da quel giorno</b> (poi “↩ Rimetti voci tolte” la riporta) oppure <b>eliminarla dalla routine</b> di tutti quei giorni.</li>' +
     '<li><b>“Domani →” su Claude lezione finanziaria, Claude lezione analisi 1 e 10 pagine libro</b>: se oggi non riesci, toccalo e la voce sparisce da oggi e domani compare due volte (quella normale + quella rimandata, con scritto “da” e il giorno).</li>' +
-    '<li><b>Trascinare</b>: gli <b>altri impegni</b> si possono trascinare in mezzo alle voci della routine, col mouse o dal telefono (tieni premuto mezzo secondo finché la voce si stacca, poi trascina; vicino al bordo la pagina scorre da sola). Una linea ti mostra dove finiscono. Per riportarli sotto, trascinali nel riquadro “Altri impegni”.</li>' +
+    '<li><b>Trascinare</b>: gli <b>altri impegni</b> si possono trascinare in mezzo alle voci della routine, col mouse o dal telefono: prendili dalla maniglia ⠿ a destra e trascina (oppure tieni premuto un attimo sulla voce); vicino al bordo la pagina scorre da sola). Una linea ti mostra dove finiscono. Per riportarli sotto, trascinali nel riquadro “Altri impegni”.</li>' +
     '<li><b>Spuntare</b> routine, settimana, impegni, mete e voci dei soldi.</li>' +
     '<li><b>Aggiornare le cifre dei soldi entro il 10 di ogni mese</b> (se no il pallino diventa arancione): VF non sa quanti soldi hai. Nella Disposizione soldi tocca il riquadrino della cifra (Paghetta, Portafoglio Louis Vuitton, Carta BCC e Borsello Dior), scrivi il numero e premi Invio o tocca fuori: si salva da solo. La cifra della carta postale si guarda sull’app Poste. Per cambiare uso, dove si trova o da dove arrivano: “Modifica” sulla sezione.</li>' +
     '<li><b>Segnare le ore di lavoro</b>: nella pagina Soldi scegli il giorno, scrivi le ore e premi +.</li></ul>' +
@@ -1065,7 +1102,11 @@ const A = {
   calPrev(){ const [y,m] = S.month.split('-').map(Number); S.month = ym(ymd(new Date(y, m-2, 1))); render(true); },
   calNext(){ const [y,m] = S.month.split('-').map(Number); S.month = ym(ymd(new Date(y, m, 1))); render(true); },
   calToday(){ S.month = ym(today()); render(true); },
-  openDay(el){ S.rtMenu = null; openSheet({type:'day', date:el.dataset.d}); },
+  dayNoteOpen(){ S.dayNote = true; renderSheet(true); const t = $('dayNoteText'); if (t){ t.focus(); t.setSelectionRange(t.value.length, t.value.length); } },
+  dayFill(){ const d = S.sheet.date; const doc = Object.assign({done:[], extras:[]}, S.c.days[d]); if (doc.fill) delete doc.fill; else doc.fill = true; put('days/'+d, doc); render(true); },
+  dayNoteCancel(){ S.dayNote = false; renderSheet(true); },
+  dayNoteSave(){ const d = S.sheet.date; const doc = Object.assign({done:[], extras:[]}, S.c.days[d]); doc.note = $('dayNoteText').value.trim(); put('days/'+d, doc); S.dayNote = false; toast('Note salvate ✓'); render(true); },
+  openDay(el){ S.rtMenu = null; S.dayNote = false; openSheet({type:'day', date:el.dataset.d}); },
   rtMenu(el){ const i = +el.dataset.i; S.rtMenu = S.rtMenu === i ? null : i; renderSheet(true); },
   rtHide(el){
     const d = S.sheet.date; const it = dayRoutine(d).flatMap(g => g.items)[+el.dataset.i]; if (it == null) return;
@@ -1257,28 +1298,21 @@ $('restoreFile').addEventListener('change', ev => {
   r.readAsText(file);
 });
 /* ---------- drag & drop: altri impegni dentro la routine del giorno ---------- */
+/* Un unico sistema per mouse e dito (niente drag nativo del browser, che sul telefono
+   mostrava l'anteprima nera e si bloccava). Mentre trascini la lista non viene ridisegnata. */
 let dragId = null;
 function clearDrop(){ document.querySelectorAll('.drop-a,.drop-b,.over').forEach(n => n.classList.remove('drop-a','drop-b','over')); }
-document.addEventListener('dragstart', ev => {
-  const r = ev.target.closest && ev.target.closest('[data-drag]'); if (!r || !S.sheet || S.sheet.type !== 'day') return;
-  dragId = r.dataset.drag; r.classList.add('dragging');
-  try { ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', dragId); } catch(e){}
-});
-document.addEventListener('dragend', () => { dragId = null; clearDrop(); document.querySelectorAll('.dragging').forEach(n => n.classList.remove('dragging')); });
-function dropTarget(ev){
-  if (!dragId || !ev.target.closest) return null;
-  const row = ev.target.closest('[data-drop]');
-  if (row && row.dataset.drag !== dragId){ const rc = row.getBoundingClientRect(); return {row, before: ev.clientY < rc.top + rc.height/2}; }
-  const zone = ev.target.closest('[data-zone]');
-  return zone ? {zone} : null;
+function dropTarget(x, y){
+  if (!dragId) return null;
+  const zones = [...document.querySelectorAll('#sheet [data-zone]')]; if (!zones.length) return null;
+  let zone = null, best = Infinity;
+  zones.forEach(z => { const rc = z.getBoundingClientRect(); const d = y < rc.top ? rc.top - y : y > rc.bottom ? y - rc.bottom : 0; if (d < best){ best = d; zone = z; } });
+  if (!zone || best > 60) return null;
+  const rows = [...zone.querySelectorAll('[data-drop]')].filter(r => r.dataset.drag !== dragId);
+  if (!rows.length) return {zone};
+  for (const r of rows){ const rc = r.getBoundingClientRect(); if (y < rc.top + rc.height/2) return {row:r, before:true}; }
+  return {row: rows[rows.length-1], before:false};
 }
-document.addEventListener('dragover', ev => {
-  const t = dropTarget(ev); if (!t) return; ev.preventDefault(); clearDrop();
-  if (t.row) t.row.classList.add(t.before ? 'drop-b' : 'drop-a'); else t.zone.classList.add('over');
-});
-document.addEventListener('drop', ev => {
-  const t = dropTarget(ev); if (!t) return; ev.preventDefault(); clearDrop(); doDrop(t);
-});
 function doDrop(t){
   const d = S.sheet && S.sheet.date; if (!d) return;
   const doc = Object.assign({done:[], extras:[]}, S.c.days[d]); const list = (doc.extras || []).slice();
@@ -1294,41 +1328,81 @@ function doDrop(t){
     list.splice(tgt < 0 ? list.length : (t.before ? tgt : tgt + 1), 0, it);
   } else if (t.zone.dataset.zone === 'extras'){ delete it.after; list.push(it); }
   else { it.after = flat.length ? flat[flat.length-1] : ''; list.push(it); }
-  doc.extras = list; dragId = null; put('days/'+d, doc); render(true);
+  doc.extras = list; put('days/'+d, doc);
 }
-/* trascinamento col dito (telefono): tieni premuto mezzo secondo, poi trascina */
 (function(){
-  let tm = null, row = null, ghost = null, sx = 0, sy = 0, lx = 0, ly = 0, on = false, sc = null, raf = 0, offY = 0;
+  let row = null, ghost = null, tm = null, on = false, sx = 0, sy = 0, lx = 0, ly = 0, offY = 0, sc = null, raf = 0, lastTouch = 0, justDragged = 0;
   const scroller = el => { for (let n = el.parentElement; n && n !== document.body; n = n.parentElement){ const o = getComputedStyle(n).overflowY; if ((o === 'auto' || o === 'scroll') && n.scrollHeight > n.clientHeight) return n; } return document.scrollingElement; };
-  const cancel = () => { clearTimeout(tm); tm = null; };
-  const stop = () => { cancel(); on = false; cancelAnimationFrame(raf); if (ghost) ghost.remove(); ghost = null; if (row) row.classList.remove('dragging'); row = null; clearDrop(); dragId = null; document.body.classList.remove('tdrag'); };
-  const target = () => { if (ghost) ghost.style.display = 'none'; const el = document.elementFromPoint(lx, ly); if (ghost) ghost.style.display = ''; return el ? dropTarget({target: el, clientY: ly}) : null; };
-  const mark = () => { clearDrop(); const t = target(); if (t){ if (t.row) t.row.classList.add(t.before ? 'drop-b' : 'drop-a'); else t.zone.classList.add('over'); } };
-  const loop = () => { if (!on) return; const r = sc === document.scrollingElement ? {top: 0, bottom: innerHeight} : sc.getBoundingClientRect(); const e = 70; let v = 0;
-    if (ly < r.top + e) v = -Math.ceil((r.top + e - ly) / 6); else if (ly > r.bottom - e) v = Math.ceil((ly - (r.bottom - e)) / 6);
+  const grabbable = ev => { const t = ev.target; if (!t || !t.closest || !S.sheet || S.sheet.type !== 'day') return null; if (t.closest('button.act,button.x,input,textarea')) return null; return t.closest('[data-drag]'); };
+  const mark = () => { clearDrop(); const t = dropTarget(lx, ly); if (t){ if (t.row) t.row.classList.add(t.before ? 'drop-b' : 'drop-a'); else t.zone.classList.add('over'); } };
+  const loop = () => { if (!on) return; const r = sc === document.scrollingElement ? {top: 0, bottom: innerHeight} : sc.getBoundingClientRect(); const e = 80; let v = 0;
+    if (ly < r.top + e) v = -Math.ceil((r.top + e - ly) / 5); else if (ly > r.bottom - e) v = Math.ceil((ly - (r.bottom - e)) / 5);
     if (v){ sc.scrollTop += v; mark(); } raf = requestAnimationFrame(loop); };
+  let isTouch = false;
+  function press(r, x, y, touch){ row = r; sx = lx = x; sy = ly = y; on = false; isTouch = !!touch; S.dragging = Date.now(); }
+  function begin(){
+    tm = null; if (!row || !row.isConnected){ release(); return; }
+    on = true; dragId = row.dataset.drag; sc = scroller(row);
+    const rc = row.getBoundingClientRect(); offY = isTouch ? rc.height + 18 : sy - rc.top;
+    ghost = row.cloneNode(true); ghost.classList.remove('pressing','drop-a','drop-b'); ghost.classList.add('ghost');
+    ghost.style.cssText = 'position:fixed;left:'+rc.left+'px;top:'+(sy - offY)+'px;width:'+rc.width+'px;margin:0;z-index:9999;pointer-events:none;background:#fff;border-radius:12px;padding-left:8px;padding-right:6px;box-shadow:0 12px 32px rgba(14,80,110,.28);transform:scale(1.03);opacity:.97';
+    document.body.appendChild(ghost); row.classList.remove('pressing'); row.classList.add('dragging'); document.body.classList.add('tdrag');
+    try { navigator.vibrate && navigator.vibrate(25); } catch(e){}
+    mark(); raf = requestAnimationFrame(loop);
+  }
+  function move(x, y){ lx = x; ly = y; if (ghost) ghost.style.top = (y - offY) + 'px'; mark(); }
+  function release(drop){
+    clearTimeout(tm); tm = null; cancelAnimationFrame(raf);
+    const was = on; const t = was && drop ? dropTarget(lx, ly) : null;
+    if (ghost) ghost.remove(); ghost = null;
+    if (row) row.classList.remove('dragging','pressing'); row = null; on = false;
+    clearDrop(); document.body.classList.remove('tdrag');
+    S.dragging = false;
+    if (t) doDrop(t);
+    dragId = null;
+    if (was) justDragged = Date.now();
+    if (t || S.dragPending){ S.dragPending = false; render(true); }
+  }
+  /* dito: tieni premuto un attimo, poi trascina */
   document.addEventListener('touchstart', ev => {
-    if (ev.touches.length !== 1) return; const r = ev.target.closest && ev.target.closest('[data-drag]');
-    if (!r || !S.sheet || S.sheet.type !== 'day' || ev.target.closest('button.act,button.x')) return;
-    const p = ev.touches[0]; sx = lx = p.clientX; sy = ly = p.clientY; row = r;
-    tm = setTimeout(() => { tm = null; if (!row) return; on = true; dragId = row.dataset.drag; sc = scroller(row);
-      const rc = row.getBoundingClientRect(); offY = sy - rc.top;
-      ghost = row.cloneNode(true); ghost.className += ' ghost'; ghost.style.cssText = 'position:fixed;left:'+rc.left+'px;top:'+rc.top+'px;width:'+rc.width+'px;z-index:9999;pointer-events:none;background:#fff;border-radius:10px;box-shadow:0 10px 30px rgba(14,80,110,.25);opacity:.95';
-      document.body.appendChild(ghost); row.classList.add('dragging'); document.body.classList.add('tdrag');
-      try { navigator.vibrate && navigator.vibrate(30); } catch(e){}
-      mark(); raf = requestAnimationFrame(loop); }, 450);
-  }, {passive: true});
+    lastTouch = Date.now();
+    if (row) return;
+    if (ev.touches.length !== 1) return; const r = grabbable(ev); if (!r) return;
+    const p = ev.touches[0]; press(r, p.clientX, p.clientY, true);
+    if (ev.target.closest('.grip')){ ev.preventDefault(); begin(); return; }
+    r.classList.add('pressing');
+    tm = setTimeout(begin, 280);
+  }, {passive: false});
   document.addEventListener('touchmove', ev => {
-    if (!row) return; const p = ev.touches[0]; lx = p.clientX; ly = p.clientY;
-    if (!on){ if (Math.abs(lx - sx) > 10 || Math.abs(ly - sy) > 10){ cancel(); row = null; } return; }
-    ev.preventDefault(); ghost.style.top = (ly - offY) + 'px'; mark();
+    lastTouch = Date.now();
+    if (!row) return; const p = ev.touches[0];
+    if (!on){ if (Math.abs(p.clientX - sx) > 8 || Math.abs(p.clientY - sy) > 8) release(); return; }
+    ev.preventDefault(); move(p.clientX, p.clientY);
   }, {passive: false});
   document.addEventListener('touchend', ev => {
-    if (!row) return; if (!on){ cancel(); row = null; return; }
-    ev.preventDefault(); const t = target(); const id = dragId; stop(); if (t){ dragId = id; doDrop(t); dragId = null; }
+    lastTouch = Date.now();
+    if (!row) return; if (!on){ release(); return; }
+    ev.preventDefault(); release(true);
   }, {passive: false});
-  document.addEventListener('touchcancel', () => { if (row) stop(); });
-  document.addEventListener('contextmenu', ev => { if (ev.target.closest && ev.target.closest('[data-drag]') && 'ontouchstart' in window) ev.preventDefault(); });
+  document.addEventListener('touchcancel', () => { if (row) release(); });
+  document.addEventListener('contextmenu', ev => { if (row || (ev.target.closest && ev.target.closest('[data-drag]') && Date.now() - lastTouch < 1000)) ev.preventDefault(); });
+  /* mouse: clicca e trascina */
+  document.addEventListener('mousedown', ev => {
+    if (ev.button !== 0 || Date.now() - lastTouch < 1000 || row) return;
+    const r = grabbable(ev); if (!r) return; press(r, ev.clientX, ev.clientY);
+  });
+  document.addEventListener('mousemove', ev => {
+    if (!row) return;
+    if (!(ev.buttons & 1)){ release(on); return; }
+    if (!on){ if (Math.abs(ev.clientX - sx) < 5 && Math.abs(ev.clientY - sy) < 5) return; begin(); if (!on) return; }
+    ev.preventDefault(); move(ev.clientX, ev.clientY);
+  });
+  document.addEventListener('mouseup', () => { if (row) release(on); });
+  window.addEventListener('blur', () => { if (row) release(); });
+  document.addEventListener('mouseleave', () => { if (row) release(on); });
+  /* dopo un trascinamento non far partire anche la spunta */
+  document.addEventListener('click', ev => { if (Date.now() - justDragged < 400){ ev.stopPropagation(); ev.preventDefault(); } }, true);
+  document.addEventListener('dragstart', ev => { if (ev.target.closest && ev.target.closest('[data-drag]')) ev.preventDefault(); });
 })();
 /* cifre della Disposizione soldi modificabili direttamente */
 document.addEventListener('change', ev => {
@@ -1353,6 +1427,9 @@ document.addEventListener('keydown', ev => { if (ev.key === 'Escape'){ if (S.she
 let lastDay = today();
 setInterval(() => { if (today() !== lastDay){ lastDay = today(); render(); } }, 60000);
 
+/* quando torni sull'app (da un altro dispositivo o scheda) ridisegna con i dati aggiornati */
+function wake(){ if (document.visibilityState === 'visible' && !document.body.classList.contains('tdrag')){ S.dragging = false; render(); } }
+document.addEventListener('visibilitychange', wake); window.addEventListener('focus', wake); window.addEventListener('pageshow', wake);
 /* ---------- init ---------- */
 render(true);
 async function init(){

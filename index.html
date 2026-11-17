@@ -508,7 +508,7 @@ function tasksOf(scope, cat){
     .sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
 }
 function weekCopyOf(id){ const ws = weekStart(); return Object.entries(S.c.tasks).find(([,t]) => t.scope === 'week' && t.fromId === id && taskWeek(t) === ws) || null; }
-function needsBackup(){ const lb = cfg().lastBackup; return !lb || (Date.now() - new Date(lb).getTime()) > 7*864e5; }
+function needsBackup(){ return false; /* backup automatico settimanale su Google Drive (Claude, ogni domenica) */ }
 function doneListCount(){ return Object.values(S.c.tasks).filter(t => t.done).length; }
 function needsCleanup(){ const lc = cfg().lastCleanup; return doneListCount() > 0 && (!lc || (Date.now() - new Date(lc).getTime()) > 7*864e5); }
 
@@ -878,7 +878,7 @@ function guideHTML(){
   return '<div class="card guide"><button class="guide-btn open" data-a="guideToggle"><span>📖 Istruzioni</span><span class="chev">'+I.chev+'</span></button>' +
   '<h4>🟢🟠 Il pallino sui tre puntini</h4><ul>' +
     '<li><span class="dotx" style="background:#10B981"></span><b>Verde</b>: tutto a posto, non devi fare niente.</li>' +
-    '<li><span class="dotx" style="background:#F97316"></span><b>Arancione</b>: c’è qualcosa da fare. Diventa arancione quando devi pulire i fatti, quando è passata più di una settimana dall’ultimo backup, oppure quando dal giorno 10 del mese non hai ancora scritto le cifre del mese per il Portafoglio Louis Vuitton e per BCC + borsello Dior. Pulizia e backup li fai da qui sotto; le cifre nella pagina Soldi (c’è anche un avviso sul calendario con il pulsante “Vai”). Poi torna verde.</li></ul>' +
+    '<li><span class="dotx" style="background:#F97316"></span><b>Arancione</b>: c’è qualcosa da fare. Diventa arancione quando devi pulire i fatti, oppure quando dal giorno 10 del mese non hai ancora scritto le cifre del mese per il Portafoglio Louis Vuitton e per BCC + borsello Dior. La pulizia la fai da qui sotto; le cifre nella pagina Soldi (c’è anche un avviso sul calendario con il pulsante “Vai”). Poi torna verde.</li></ul>' +
   '<h4>⚙️ Cosa fa VF da solo</h4><ul>' +
     '<li><b>Routine del giorno</b>: ogni giorno riparte pulita, con la versione giusta (ogni giorno da lunedì a venerdì ha la sua, il weekend ne ha una sola).</li>' +
     '<li><b>Impegni fissi e altri impegni della settimana</b>: le spunte degli impegni fissi si azzerano da sole ogni lunedì, non serve che lo faccia Claude.</li>' +
@@ -891,7 +891,7 @@ function guideHTML(){
     '<li><b>Calendario</b>: riempie i cerchietti in base a quanta routine hai fatto e mette il puntino arancione nei giorni con impegni extra.</li>' +
     '<li><b>Categorie</b>: mette in alto quelle con più impegni e aggiorna i cerchietti.</li>' +
     '<li><b>“+ Settimana”</b>: in Personali e Progetti, accanto a ogni impegno, lo copia nella scheda Settimana (questa settimana) nella stessa categoria. Se hai sbagliato, tocca “↩ Settimana” e lo toglie dalla settimana (in Personali/Progetti resta). Quando lo spunti in un posto, si spunta anche nell’altro.</li>' +
-    '<li><b>Promemoria</b>: ti avvisa sul calendario (e col pallino arancione) se è ora del backup o della pulizia.</li>' +
+    '<li><b>Promemoria</b>: ti avvisa sul calendario (e col pallino arancione) se è ora della pulizia.</li><li><b>Backup automatico ogni domenica (verso le 20:40)</b>: Claude copia da solo tutti i tuoi dati in un nuovo file nella cartella <b>“VF Backup”</b> del tuo Google Drive (drive.google.com → Il mio Drive → VF Backup; dal telefono app Google Drive → File → Il mio Drive → VF Backup) e ti manda una <b>notifica sul telefono dall’app Claude</b> (“Backup VF fatto ✓”). Ogni settimana si aggiunge un file nuovo con la data; i vecchi restano. Così il database viene usato almeno una volta a settimana e non va mai in pausa, nemmeno se non apri VF.</li><li><b>Mac e iPhone sincronizzati</b>: quello che scrivi su uno compare sull’altro in pochi secondi. I dati stanno online (Supabase), non nel dispositivo.</li><li><b>Accesso</b>: email e password le metti una volta sola per dispositivo (Mac e iPhone). Te le richiede solo se premi “Esci dall’account”, se cancelli l’app o se cancelli i dati di Safari: i dati non si perdono mai, rientri e ritrovi tutto.</li>' +
     '<li><b>Salvataggio</b>: tutto quello che spunti o aggiungi si salva online subito. Quando modifichi un testo (routine, soldi, fisico, note) premi “Salva”.</li></ul>' +
   '<h4>📅 Cosa compare da solo nel calendario</h4><ul>' +
     '<li><b>Una settimana sì e una no</b> (settimane del 23 nov, 7 dic, 21 dic…):<ul>' +
@@ -906,7 +906,7 @@ function guideHTML(){
     '<li><b>Lunedì–giovedì</b>: Studio 8–17:30 (1:30 pausa). Il martedì niente allenamento.</li>' +
     '<li>Per cambiarle: ⋯ → Modifica routine. In fondo a una voce, [alterna A] o [alterna B] la fa comparire una settimana sì e una no (A = 16 nov, 30 nov…; B = 23 nov, 7 dic…); [sab], [lun mer] ecc. la limita a quei giorni.</li></ul>' +
   '<h4>✋ Cosa devi fare tu</h4><ul>' +
-    '<li><b>Ogni settimana, il backup</b>: “Scarica backup” qui sotto. Tieni il file in una cartella tipo “Backup VF” su iCloud Drive o Google Drive. Non aprirlo e non modificarlo: serve solo per il ripristino.</li>' +
+    '<li><b>Il backup lo fa Claude ogni domenica</b> (vedi sopra): tu non devi fare niente, solo controllare che arrivi la notifica. Se la notifica dice che qualcosa non va (per esempio il progetto Supabase è in pausa), segui quello che dice o scrivilo a Claude. Se vuoi una copia in più quando vuoi tu: “Scarica backup” qui sotto.</li>' +
     '<li><b>Quando vuoi, “Pulisci fatti”</b>: toglie gli impegni già spuntati. Finché non lo premi restano lì, barrati. Non parte mai da sola.</li>' +
     '<li><b>“Domani →”</b> sugli impegni extra non fatti, se vuoi spostarli al giorno dopo. Se li avevi messi dentro la routine, il giorno dopo restano nello stesso punto.</li>' +
     '<li><b>Dentro un giorno</b>: passa col mouse sopra una voce della routine e tocca ⋯ in fondo a destra. Puoi <b>toglierla solo da quel giorno</b> (poi “↩ Rimetti voci tolte” la riporta) oppure <b>eliminarla dalla routine</b> di tutti quei giorni.</li>' +
@@ -921,14 +921,14 @@ function guideHTML(){
     '<li class="ex">“in VF aggiungi a Casa: chiamare l’idraulico”</li>' +
     '<li class="ex">“in VF cambia la routine del sabato”</li>' +
     '<li class="ex">“in VF modifica il colore” oppure “aggiungi una sezione”</li>' +
-    '<li>Claude lo inserisce e lo trovi subito qui. Claude non fa niente da solo: lavora solo quando gli scrivi.</li></ul>' +
+    '<li>Claude lo scrive direttamente nel tuo database (connettore Supabase) e lo trovi qui in pochi secondi, sul Mac e sull’iPhone. Le modifiche all’app (colori, sezioni…) Claude le pubblica su GitHub. L’unica cosa che Claude fa da solo è il backup della domenica.</li></ul>' +
   '<h4>🆘 Se qualcosa va storto</h4><ul>' +
-    '<li>Se perdi dati o cancelli qualcosa per sbaglio: “Ripristina backup” qui sotto e scegli l’ultimo file scaricato. VF torna com’era al momento di quel backup.</li></ul>' +
+    '<li>Se perdi dati o cancelli qualcosa per sbaglio: “Ripristina backup” qui sotto e scegli l’ultimo file (lo trovi in Google Drive → VF Backup; prima scaricalo sul dispositivo). VF torna com’era al momento di quel backup. Oppure chiedi a Claude: “ripristina VF dall’ultimo backup”.</li><li>Se VF dice che non riesce a collegarsi ai dati: probabilmente il progetto Supabase è in pausa. Vai su supabase.com, entra nel progetto e clicca “Restore project”, oppure chiedi a Claude.</li></ul>' +
   '</div>';
 }
 function sheetSettings(){
   const lb = cfg().lastBackup;
-  let b = guideHTML() + '<div class="card"><h3>📦 Backup</h3><div class="help" style="margin-top:0">'+(lb ? 'Ultimo backup: <b>'+esc(new Date(lb).toLocaleString('it-IT',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}))+'</b>' : 'Non hai ancora scaricato nessun backup.')+'<br>Scaricalo una volta a settimana: è un file con tutti i tuoi dati, da tenere al sicuro (per esempio su Drive).</div>';
+  let b = guideHTML() + '<div class="card"><h3>📦 Backup</h3><div class="help" style="margin-top:0">'+(lb ? 'Ultimo backup: <b>'+esc(new Date(lb).toLocaleString('it-IT',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}))+'</b>' : 'Non hai ancora scaricato nessun backup.')+'<br>Il backup automatico lo fa Claude <b>ogni domenica</b> nella cartella <b>VF Backup</b> di Google Drive, con notifica sul telefono. Qui puoi scaricarne uno in più quando vuoi.</div>';
   b += '<div class="btns"><button class="pill" data-a="backupDl">Scarica backup</button><button class="pill ghost" data-a="backupRestore">Ripristina backup</button><button class="pill ghost" data-a="logout">Esci dall’account</button></div></div>';
   b += '<div class="card"><h3>🔁 Routine e settimana</h3><div class="help" style="margin-top:0">Cambia le voci della routine di ogni giorno (lunedì, martedì, mercoledì, giovedì, venerdì, weekend) e gli impegni fissi della settimana.</div><div class="btns"><button class="pill ghost" data-a="routineEdit">Modifica routine e settimana</button></div></div>';
   b += '<div class="card"><h3>💵 Soldi</h3><div class="help" style="margin-top:0">Cambia le voci da fare ogni mese nella sezione Soldi.</div><div class="btns"><button class="pill ghost" data-a="soldiEdit">Modifica soldi</button></div></div>';

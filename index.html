@@ -833,12 +833,12 @@ function renderMete(force){
   h += '<div class="card">'+progress(items.filter(x => x.done).length, items.length);
   const gOrd = METE_GROUPS.concat(items.map(x => x.group || '').filter((g, i, a) => !METE_GROUPS.includes(g) && a.indexOf(g) === i));
   let firstG = true;
-  gOrd.forEach(g => { const gi = items.filter(x => (x.group || '') === g); const main = METE_GROUPS.includes(g); if (!gi.length && !main) return;
+  gOrd.forEach(g => { const gi = items.filter(x => (x.group || '') === g); if (!gi.length) return;
     if (g) h += '<div class="grp-t" style="margin-top:'+(firstG ? '6px' : '18px')+'">'+esc(g)+'</div>'; firstG = false;
-    gi.forEach(x => { h += chkRow(x.done, 'data-a="meteChk" data-id="'+x.id+'"', x.text, '<button class="x" data-a="meteEdit" data-id="'+x.id+'" aria-label="Modifica">'+I.dots+'</button>'); });
-    if (main) h += '<form class="add" data-f="meteAdd" data-g="'+g+'"><input name="t" placeholder="Nuova meta '+g.toLowerCase()+'…" autocomplete="off" data-focus="meteAdd'+g+'"><button aria-label="Aggiungi meta '+g.toLowerCase()+'">'+I.plus+'</button></form>'; });
+    gi.forEach(x => { h += chkRow(x.done, 'data-a="meteChk" data-id="'+x.id+'"', x.text, ''); }); });
+  if (!items.length) h += '<div class="empty">Nessuna meta. Aggiungile da Impostazioni → Modifica mete.</div>';
   h += '</div>';
-  if ((p.character || []).length) h += '<div class="card"><h3>'+esc(p.characterTitle || 'Obiettivi carattere')+'</h3><ol>'+p.character.map(c => '<li>'+esc(c)+'</li>').join('')+'</ol></div>';
+  if ((p.character || []).length) h += '<div class="card"><h3>'+esc(p.characterTitle || 'Valori')+'</h3><ol>'+p.character.map(c => '<li>'+esc(c)+'</li>').join('')+'</ol></div>';
   h += '</div></div>';
   const wrap = el.firstElementChild;
   if (wrap && !force && isTyping(wrap)) return;
@@ -869,6 +869,7 @@ function renderSheet(force){
   else if (s.type === 'task') html = sheetTask(s.id);
   else if (s.type === 'cat') html = sheetCat(s.id);
   else if (s.type === 'meteItem') html = sheetMeteItem(s.id);
+  else if (s.type === 'meteAll') html = sheetMeteAll();
   else if (s.type === 'note') html = sheetNote(s);
   else if (s.type === 'folder') html = sheetFolder(s.id);
   else if (s.type === 'confirm') html = sheetFrame(esc(s.title), '', '<div class="help" style="font-size:14px;color:var(--ink)">'+esc(s.msg)+'</div><div class="btns"><button class="pill ghost" data-a="sheetClose">Annulla</button><button class="pill '+(s.danger?'danger':'')+'" data-a="confirmOk">'+esc(s.ok)+'</button></div>');
@@ -973,10 +974,21 @@ function sheetSettings(){
   const lb = cfg().lastBackup;
   let b = guideHTML() + '<div class="card"><h3>📦 Backup</h3><div class="help" style="margin-top:0">'+(lb ? 'Ultimo backup: <b>'+esc(new Date(lb).toLocaleString('it-IT',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}))+'</b>' : 'Non hai ancora scaricato nessun backup.')+'<br>Il backup automatico lo fa Claude <b>ogni domenica</b> nella cartella <b>VF Backup</b> di Google Drive, con notifica sul telefono. Qui puoi scaricarne uno in più quando vuoi.</div>';
   b += '<div class="btns"><button class="pill" data-a="backupDl">Scarica backup</button><button class="pill ghost" data-a="backupRestore">Ripristina backup</button><button class="pill ghost" data-a="logout">Esci dall’account</button></div></div>';
+  b += '<div class="card"><h3>🎯 Mete</h3><div class="help" style="margin-top:0">Aggiungi, cambia o togli le mete (Professionale e Privata) e i Valori. Nella pagina Mete si possono solo spuntare.</div><div class="btns"><button class="pill ghost" data-a="meteAllEdit">Modifica mete</button></div></div>';
   b += '<div class="card"><h3>🔁 Routine e settimana</h3><div class="help" style="margin-top:0">Cambia le voci della routine di ogni giorno (lunedì, martedì, mercoledì, giovedì, venerdì, weekend) e gli impegni fissi della settimana.</div><div class="btns"><button class="pill ghost" data-a="routineEdit">Modifica routine e settimana</button></div></div>';
   b += '<div class="card"><h3>💵 Soldi</h3><div class="help" style="margin-top:0">Cambia le voci da fare ogni mese nella sezione Soldi.</div><div class="btns"><button class="pill ghost" data-a="soldiEdit">Modifica soldi</button></div></div>';
   b += '<div class="card"><h3>🧹 Pulisci fatti</h3><div class="help" style="margin-top:0">Toglie tutti gli impegni già spuntati (Settimana, Personali e Progetti). Non parte mai da sola: la fai tu quando vuoi.'+(cfg().lastCleanup ? ' Ultima pulizia: '+esc(new Date(cfg().lastCleanup).toLocaleDateString('it-IT',{day:'numeric',month:'long'}))+'.' : '')+'</div><div class="btns"><button class="pill pink" data-a="cleanDone">Pulisci fatti ('+doneListCount()+')</button></div></div>';
   return sheetFrame('Istruzioni e impostazioni', '', b);
+}
+function sheetMeteAll(){
+  const p = page('mete'); const items = p.items || [];
+  const lines = g => items.filter(x => (x.group || 'Privata') === g).map(x => x.text).join('\n');
+  let b = '<label class="lb">Titolo sotto “Mete”</label><input class="field" style="width:100%" id="metePeriod" value="'+esc(p.period || '')+'">';
+  METE_GROUPS.forEach(g => { b += '<label class="lb" style="margin-top:14px">'+g+'</label><textarea class="field" id="meteTa'+g+'" style="min-height:170px">'+esc(lines(g))+'</textarea>'; });
+  b += '<label class="lb" style="margin-top:14px">'+esc(p.characterTitle || 'Valori')+'</label><textarea class="field" id="meteTaVal" style="min-height:150px">'+esc((p.character || []).join('\n'))+'</textarea>';
+  b += '<div class="help">Una meta per riga. Per aggiungerne una scrivi una riga nuova, per toglierla cancella la riga. Le mete già spuntate restano spuntate se non cambi il testo.</div>';
+  b += '<div class="btns"><button class="pill ghost" data-a="sheetClose">Annulla</button><button class="pill" data-a="meteAllSave">Salva</button></div>';
+  return sheetFrame('Modifica mete', '', b);
 }
 function sheetRoutine(s){
   const r = cfg().routine || {}; const k = s.tab || 'lun';
@@ -1208,6 +1220,19 @@ const A = {
     toast('Salvato ✓'); const back = S.sheet.back; S.sheet = back && back.type === 'day' ? back : null; render(true);
   },
   meteChk(el){ const items = (page('mete').items || []).map(x => x.id === el.dataset.id ? Object.assign({}, x, {done:!x.done}) : x); putPage('mete', {items}); render(true); },
+  meteAllEdit(){ openSheet({type:'meteAll'}); },
+  meteAllSave(){
+    const old = page('mete').items || []; const used = new Set();
+    const rows = t => String(t || '').split('\n').map(x => x.trim()).filter(Boolean);
+    const items = [];
+    METE_GROUPS.forEach(g => rows($('meteTa'+g).value).forEach(text => {
+      const o = old.find(x => !used.has(x.id) && x.text === text && (x.group || 'Privata') === g) || old.find(x => !used.has(x.id) && x.text === text);
+      if (o) used.add(o.id);
+      items.push({id: o ? o.id : uid(), text, done: o ? !!o.done : false, group: g});
+    }));
+    putPage('mete', {period: $('metePeriod').value.trim(), items, character: rows($('meteTaVal').value)});
+    closeSheet(); toast('Mete salvate ✓'); render(true);
+  },
   meteEdit(el){ S.meteGrp = null; openSheet({type:'meteItem', id:el.dataset.id}); },
   meteGrp(el){ const t = $('meteText'); if (t) S.sheet.draft = t.value; S.meteGrp = el.dataset.g; renderSheet(true); const n = $('meteText'); if (n && S.sheet.draft != null) n.value = S.sheet.draft; },
   meteSave(el){ const text = $('meteText').value.trim(); if (!text) return; putPage('mete', {items:(page('mete').items||[]).map(x => x.id === el.dataset.id ? Object.assign({}, x, {text}, S.meteGrp ? {group:S.meteGrp} : {}) : x)}); S.meteGrp = null; closeSheet(); render(true); },

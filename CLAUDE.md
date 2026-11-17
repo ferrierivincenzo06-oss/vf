@@ -17,6 +17,9 @@ Quindi:
 - Quando Vincenzo dice "VF" intende la **VF app**.
 
 ## Altre preferenze
-- Gli impegni li metti **dove dice lui**: non c'è una posizione fissa (non sempre "prima di pranzo").
+- Quando Vincenzo dice "aggiungi in agenda a questo giorno questa attività" (impegno extra in `days/<data>.extras`):
+  - testo con **prima lettera maiuscola e il resto minuscolo** (i nomi propri restano maiuscoli: persone, città, luoghi);
+  - va messo come **prima voce del giorno**, prima di "Sveglia": `after: ''` (= in cima). Non più prima di pranzo.
+  - Se lui indica esplicitamente un'altra posizione, segui quella.
 - Prima di fare modifiche, se lui chiede "prima rispondimi", rispondi e aspetta il suo ok.
 - Scrivi a Vincenzo in italiano, semplice.

@@ -30,7 +30,10 @@
   pages/mete  { period, items:[{id,text,done,group?}] (group = titolo sezione, es. Professionale/Privata), character:[testo], characterTitle? }
   pages/soldi { monthly:[{id,text}], checks:{ "YYYY-MM":[id] }, body, hours:[{id,date:'YYYY-MM-DD',h:numero,note?}], rate,
                 banner, dispo:[{id,emoji,title,cifra?|parts?:[{label,val}],uso,dove,fonte,upd}] }
-  pages/fisico { body }   pages/alimentazione { body }
+  pages/fisico { body } oppure { summary, week:[{d,emoji,title,time?,kind:'box'|'run'|'opt'|'rest'}], blocks:[{title,rows:[[k,v]]}] } (scheda Allenamento)
+  pages/alimentazione { body } oppure { intro, days:[{d,tag?,colazione,spuntino?,cena:testo|{A,B}}] (A/B = settimane alterne), altNote, pranzo,
+                 prep:{sub,intro,ingredients:[[nome,qta]],steps:[testo],note}, shopping:[{id,text,qty}], blocks:[{title,rows:[[k,v]]}] }
+  pages/mete items[].details? { title, cols:[..], rows:[{c:[..],hl?}], note } → pulsante "Vedi dettagli"
   notes/<id>  { folder, title, body, updatedAt }
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -262,6 +265,36 @@ select.field{width:100%;appearance:none}
 .mete h1{font-size:40px;font-weight:800;margin:26px 0 2px;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;display:inline-block}
 .mete .per{color:var(--muted);font-weight:600;margin-bottom:18px}
 .mete .card{border-radius:22px}
+/* allenamento + alimentazione */
+.wk7{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+@media (max-width:520px){.wk7{grid-template-columns:repeat(4,1fr)}}
+.wkd{border-radius:14px;padding:9px 6px;text-align:center;background:#F3F8FA;min-height:92px;display:flex;flex-direction:column;align-items:center;gap:3px}
+.wkd .dn{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.wkd .em{font-size:22px;line-height:1.2}
+.wkd .tt{font-size:12.5px;font-weight:800;line-height:1.2}
+.wkd .tm{font-size:11px;font-weight:700;color:var(--muted);line-height:1.2}
+.wkd.k-box{background:#E0F4FA}.wkd.k-box .tt{color:#0A86A6}
+.wkd.k-run{background:#E3F7EF}.wkd.k-run .tt{color:#0E9F6E}
+.wkd.k-opt{background:#F3F8FA;border:1.5px dashed #BFD9E0}.wkd.k-opt .tt{color:#5E7C87}
+.wkd.k-rest .tt{color:#9BB0B8}
+.lgd{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;font-size:12px;font-weight:600;color:var(--muted)}
+.lgd i{display:inline-block;width:10px;height:10px;border-radius:4px;margin-right:5px;vertical-align:-1px}
+.kv{display:flex;gap:10px;padding:8px 0;align-items:flex-start}
+.kv + .kv{border-top:1px solid #EEF5F7}
+.kv .k{flex:none;width:92px;font-size:12.5px;font-weight:800;color:var(--muted)}
+.kv .v{flex:1;line-height:1.4;font-size:14px}
+.dayc h3 .tag{font-size:11px;font-weight:700;color:var(--violet);background:var(--soft);border-radius:8px;padding:3px 7px;margin-left:auto}
+.bigb{width:100%;display:flex;align-items:center;gap:10px;padding:13px 14px;border-radius:16px;background:var(--soft);color:var(--violet);font-weight:800;font-size:14.5px;text-align:left}
+.bigb span{flex:1}
+.bigb svg{width:20px;height:20px;flex:none}
+.ttab{width:100%;border-collapse:collapse;font-size:14px}
+.ttab th{text-align:left;font-size:12px;color:var(--muted);font-weight:800;padding:6px 4px;border-bottom:1px solid var(--line)}
+.ttab td{padding:9px 4px;border-bottom:1px solid #EEF5F7}
+.ttab tr.hl td{font-weight:800;color:var(--violet)}
+.steps{margin:0;padding-left:20px;line-height:1.5}
+.steps li{margin-bottom:8px}
+.shop .chk{flex-wrap:wrap;row-gap:0}
+.shop .q{flex:0 0 100%;padding-left:34px;font-size:12.5px;font-weight:700;color:var(--muted)}
 .mete .chk{padding:10px 0}
 .mete .chk .t{font-weight:600}
 .mete ol{margin:0;padding-left:22px;line-height:1.8}
@@ -795,11 +828,58 @@ function dispoHTML(p){
   return h;
 }
 function renderFisico(){
-  let h = '<div class="page-h"><h1>Fisico e alimentazione</h1></div>';
-  h += '<div class="seg"><button class="'+(S.fisTab==='fisico'?'on':'')+'" data-a="fisTab" data-t="fisico">💪 Fisico</button><button class="'+(S.fisTab==='alimentazione'?'on':'')+'" data-a="fisTab" data-t="alimentazione">🍲 Alimentazione</button></div>';
-  const k = S.fisTab;
-  h += editableCard(k, k === 'fisico' ? 'Fisico' : 'Alimentazione', page(k).body);
+  let h = '<div class="page-h"><h1>Allenamento e alimentazione</h1></div>';
+  h += '<div class="seg"><button class="'+(S.fisTab==='fisico'?'on':'')+'" data-a="fisTab" data-t="fisico">🥊 Allenamento</button><button class="'+(S.fisTab==='alimentazione'?'on':'')+'" data-a="fisTab" data-t="alimentazione">🍲 Alimentazione</button></div>';
+  const k = S.fisTab; const pg = page(k);
+  if (k === 'fisico' && pg.week) return h + renderAllenamento(pg);
+  if (k === 'alimentazione' && pg.days) return h + renderAlimentazione(pg);
+  h += editableCard(k, k === 'fisico' ? 'Allenamento' : 'Alimentazione', pg.body);
   return h;
+}
+function renderAllenamento(p){
+  let h = '';
+  if (p.summary) h += '<div class="card"><h3>🎯 La settimana</h3><div class="rt">'+esc(p.summary)+'</div></div>';
+  h += '<div class="card"><div class="wk7">' + (p.week || []).map(d => '<div class="wkd k-'+esc(d.kind || 'rest')+'"><div class="dn">'+esc(d.d)+'</div><div class="em">'+esc(d.emoji || '')+'</div><div class="tt">'+esc(d.title || '')+'</div>'+(d.time ? '<div class="tm">'+esc(d.time)+'</div>' : '')+'</div>').join('') + '</div>' +
+    '<div class="lgd"><span><i style="background:#BFE6F2"></i>Boxe</span><span><i style="background:#BFEBD8"></i>Corsa</span><span><i style="background:#F3F8FA;border:1.5px dashed #BFD9E0"></i>Facoltativa / a scelta</span></div></div>';
+  (p.blocks || []).forEach(b => { h += '<div class="card"><h3>'+esc(b.title)+'</h3>' + (b.rows || []).map(r => '<div class="kv"><div class="k">'+esc(r[0])+'</div><div class="v">'+esc(r[1])+'</div></div>').join('') + '</div>'; });
+  return h;
+}
+function renderAlimentazione(p){
+  const par = weekParity(weekStart()); let h = '';
+  if (p.intro) h += '<div class="card"><div class="rt">'+esc(p.intro)+'</div></div>';
+  h += '<div class="sec-t">🗓️ La settimana</div>';
+  (p.days || []).forEach(d => {
+    const cena = d.cena && typeof d.cena === 'object' ? d.cena[par] : d.cena;
+    const rows = [['☀️ Colazione', d.colazione], ['🍎 Spuntino', d.spuntino], ['🌙 Cena', cena]].filter(r => r[1]);
+    h += '<div class="card dayc"><h3>'+esc(d.d)+(d.tag ? '<span class="tag">'+esc(d.tag)+'</span>' : '')+'</h3>' + rows.map(r => '<div class="kv"><div class="k">'+r[0]+'</div><div class="v">'+esc(r[1])+'</div></div>').join('') + '</div>';
+  });
+  if (p.altNote) h += '<div class="help" style="margin:-4px 4px 12px">'+esc(p.altNote)+'</div>';
+  if (p.pranzo) h += '<div class="sec-t">🍱 Pranzo</div><div class="card"><div class="rt" style="margin-bottom:10px">'+esc(p.pranzo)+'</div><button class="bigb" data-a="prepOpen"><span>Vedi preparazione della domenica</span>'+I.right+'</button></div>';
+  const list = p.shopping || []; const sel = S.shopSel || (S.shopSel = new Set());
+  if (list.length){
+    h += '<div class="sec-t">🛒 Spesa della settimana</div><div class="card shop"><h3>Lista<span class="sub"><button class="mini" data-a="shopAll">'+(sel.size === list.length ? 'Deseleziona tutti' : 'Seleziona tutti')+'</button></span></h3>';
+    list.forEach(x => { h += chkRow(sel.has(x.id), 'data-a="shopSel" data-id="'+x.id+'"', x.text, x.qty ? '<span class="q">'+esc(x.qty)+'</span>' : ''); });
+    h += '<div class="btns"><button class="pill" style="flex:1;padding:12px'+(sel.size ? '' : ';opacity:.5')+'" data-a="shopAdd">Aggiungi a Spesa'+(sel.size ? ' ('+sel.size+')' : '')+'</button></div><div class="help">Le voci scelte vanno in Personali → Spesa.</div></div>';
+  }
+  (p.blocks || []).forEach(b => { h += '<div class="card"><h3>'+esc(b.title)+'</h3>' + (b.rows || []).map(r => '<div class="kv"><div class="k">'+esc(r[0])+'</div><div class="v">'+esc(r[1])+'</div></div>').join('') + '</div>'; });
+  return h;
+}
+function sheetPrep(){
+  const pr = page('alimentazione').prep || {};
+  let b = '';
+  if (pr.intro) b += '<div class="help" style="margin-top:0;font-size:13.5px">'+esc(pr.intro)+'</div>';
+  b += '<div class="card"><h3>🧺 Ingredienti</h3>' + (pr.ingredients || []).map(r => '<div class="kv"><div class="k" style="width:auto;flex:1;color:var(--ink);font-weight:600;font-size:14px">'+esc(r[0])+'</div><div class="v" style="flex:none;text-align:right;font-weight:800;color:var(--violet)">'+esc(r[1])+'</div></div>').join('') + '</div>';
+  b += '<div class="card"><h3>👨‍🍳 Procedimento</h3><ol class="steps">' + (pr.steps || []).map(s => '<li>'+esc(s)+'</li>').join('') + '</ol></div>';
+  if (pr.note) b += '<div class="help">'+esc(pr.note)+'</div>';
+  return sheetFrame('Preparazione della domenica', esc(pr.sub || ''), b);
+}
+function sheetMeteDet(id){
+  const it = (page('mete').items || []).find(x => x.id === id); if (!it || !it.details) return '';
+  const d = it.details;
+  let b = '<div class="help" style="margin-top:0;font-size:14px;color:var(--ink);font-weight:600">'+esc(it.text)+'</div>';
+  b += '<div class="card"><table class="ttab"><tr>'+(d.cols || []).map(c => '<th>'+esc(c)+'</th>').join('')+'</tr>' + (d.rows || []).map(r => '<tr'+(r.hl ? ' class="hl"' : '')+'>'+(r.c || r).map(c => '<td>'+esc(c)+'</td>').join('')+'</tr>').join('') + '</table></div>';
+  if (d.note) b += '<div class="help">'+esc(d.note)+'</div>';
+  return sheetFrame(esc(d.title || 'Dettagli'), '', b);
 }
 function renderNotes(){
   const folders = cfg().noteFolders || [];
@@ -835,7 +915,7 @@ function renderMete(force){
   let firstG = true;
   gOrd.forEach(g => { const gi = items.filter(x => (x.group || '') === g); if (!gi.length) return;
     if (g) h += '<div class="grp-t" style="margin-top:'+(firstG ? '6px' : '18px')+'">'+esc(g)+'</div>'; firstG = false;
-    gi.forEach(x => { h += chkRow(x.done, 'data-a="meteChk" data-id="'+x.id+'"', x.text, ''); }); });
+    gi.forEach(x => { h += chkRow(x.done, 'data-a="meteChk" data-id="'+x.id+'"', x.text, x.details ? '<button class="act" data-a="meteDet" data-id="'+x.id+'">Vedi dettagli</button>' : ''); }); });
   if (!items.length) h += '<div class="empty">Nessuna meta. Aggiungile da Impostazioni → Modifica mete.</div>';
   h += '</div>';
   if ((p.character || []).length) h += '<div class="card"><h3>'+esc(p.characterTitle || 'Valori')+'</h3><ol>'+p.character.map(c => '<li>'+esc(c)+'</li>').join('')+'</ol></div>';
@@ -870,6 +950,8 @@ function renderSheet(force){
   else if (s.type === 'cat') html = sheetCat(s.id);
   else if (s.type === 'meteItem') html = sheetMeteItem(s.id);
   else if (s.type === 'meteAll') html = sheetMeteAll();
+  else if (s.type === 'meteDet') html = sheetMeteDet(s.id);
+  else if (s.type === 'prep') html = sheetPrep();
   else if (s.type === 'note') html = sheetNote(s);
   else if (s.type === 'folder') html = sheetFolder(s.id);
   else if (s.type === 'confirm') html = sheetFrame(esc(s.title), '', '<div class="help" style="font-size:14px;color:var(--ink)">'+esc(s.msg)+'</div><div class="btns"><button class="pill ghost" data-a="sheetClose">Annulla</button><button class="pill '+(s.danger?'danger':'')+'" data-a="confirmOk">'+esc(s.ok)+'</button></div>');
@@ -944,10 +1026,11 @@ function guideHTML(){
     '<li><b>Nelle settimane opposte</b> (20 nov, 4 dic, 18 dic…): <b>Visione prenotazione capelli Adam</b> il venerdì, subito dopo pranzo.</li>' +
     '<li><b>Ogni lunedì e mercoledì</b>: Preparo sacca allenamento box (la mattina) e Allenamento box 18–20.</li>' +
     '<li><b>Ogni venerdì</b>: Rasoio dopo pranzo e Allenamento box 19–21.</li>' +
-    '<li><b>Ogni giovedì e sabato</b>: Allenamento corsa, dopo Aki (o dopo pranzo se Aki non c’è).</li>' +
+    '<li><b>Martedì o giovedì</b>: Allenamento corsa; <b>sabato o domenica</b> corsa facoltativa.</li>' +
+    '<li><b>Ogni venerdì</b>: Fare la spesa (prima voce). <b>Ogni sabato</b>: Pesarmi e mandare foto bilancia a Claude (prima voce). <b>Ogni domenica</b>: Preparare le 5 vaschette.</li>' +
     '<li><b>Ogni giovedì</b>: Visione esercizi Giulia marketing, la sera prima di 10 pagine libro.</li>' +
     '<li><b>Ogni domenica</b>: Organizzo settimana successiva, dopo 10 pagine libro.</li>' +
-    '<li><b>Lunedì–giovedì</b>: Studio 8–17:30 (1:30 pausa). Il martedì niente allenamento.</li>' +
+    '<li><b>Lunedì–giovedì</b>: Studio 8–17:30 (1:30 pausa).</li>' +
     '<li>Per cambiarle: ⋯ → Modifica routine. In fondo a una voce, [alterna A] o [alterna B] la fa comparire una settimana sì e una no (A = 16 nov, 30 nov…; B = 23 nov, 7 dic…); [sab], [lun mer] ecc. la limita a quei giorni.</li></ul>' +
   '<h4>✋ Cosa devi fare tu</h4><ul>' +
     '<li><b>Il backup lo fa Claude ogni domenica</b> (vedi sopra): tu non devi fare niente, solo controllare che arrivi la notifica. Se la notifica dice che qualcosa non va (per esempio il progetto Supabase è in pausa), segui quello che dice o scrivilo a Claude. Se vuoi una copia in più quando vuoi tu: “Scarica backup” qui sotto.</li>' +
@@ -1221,6 +1304,18 @@ const A = {
   },
   meteChk(el){ const items = (page('mete').items || []).map(x => x.id === el.dataset.id ? Object.assign({}, x, {done:!x.done}) : x); putPage('mete', {items}); render(true); },
   meteAllEdit(){ openSheet({type:'meteAll'}); },
+  meteDet(el){ openSheet({type:'meteDet', id:el.dataset.id}); },
+  prepOpen(){ openSheet({type:'prep'}); },
+  shopSel(el){ const s = S.shopSel || (S.shopSel = new Set()); const id = el.dataset.id; s.has(id) ? s.delete(id) : s.add(id); render(true); },
+  shopAll(){ const list = page('alimentazione').shopping || []; const s = S.shopSel || (S.shopSel = new Set()); if (s.size === list.length) s.clear(); else list.forEach(x => s.add(x.id)); render(true); },
+  shopAdd(){
+    const list = page('alimentazione').shopping || []; const s = S.shopSel || new Set();
+    const pick = list.filter(x => s.has(x.id)); if (!pick.length){ toast('Scegli prima le voci da aggiungere.'); return; }
+    const have = new Set(Object.values(S.c.tasks).filter(t => t.cat === 'spesa' && !t.done).map(t => String(t.text).toLowerCase()));
+    let n = 0, k = 0;
+    pick.forEach(x => { const text = x.qty ? x.text+' – '+x.qty : x.text; if (have.has(text.toLowerCase())){ k++; return; } put('tasks/'+uid(), {text, cat:'spesa', scope:'list', done:false, doneAt:null, createdAt:Date.now()+n}); n++; });
+    S.shopSel = new Set(); toast(n ? 'Aggiunte '+n+' voci a Spesa ✓'+(k ? ' ('+k+' c’erano già)' : '') : 'Erano già tutte in Spesa'); render(true);
+  },
   meteAllSave(){
     const old = page('mete').items || []; const used = new Set();
     const rows = t => String(t || '').split('\n').map(x => x.trim()).filter(Boolean);
@@ -1228,7 +1323,7 @@ const A = {
     METE_GROUPS.forEach(g => rows($('meteTa'+g).value).forEach(text => {
       const o = old.find(x => !used.has(x.id) && x.text === text && (x.group || 'Privata') === g) || old.find(x => !used.has(x.id) && x.text === text);
       if (o) used.add(o.id);
-      items.push({id: o ? o.id : uid(), text, done: o ? !!o.done : false, group: g});
+      items.push(Object.assign({}, o || {}, {id: o ? o.id : uid(), text, done: o ? !!o.done : false, group: g}));
     }));
     putPage('mete', {period: $('metePeriod').value.trim(), items, character: rows($('meteTaVal').value)});
     closeSheet(); toast('Mete salvate ✓'); render(true);

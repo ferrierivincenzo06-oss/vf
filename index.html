@@ -209,6 +209,11 @@ body.tdrag *{cursor:grabbing!important}
 .mini{font-size:12.5px;font-weight:700;color:var(--violet)}
 .row-btns{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px}
 /* studio */
+.stgo{flex:none;display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:800;color:#fff;background:var(--grad);border-radius:999px;padding:5px 10px 5px 8px;box-shadow:0 3px 10px rgba(14,165,201,.25);white-space:nowrap}
+.stgo svg{width:14px;height:14px}
+.cat.has-go{position:relative}
+.cat.has-go .cat-h{padding-right:82px}
+.cat-go{position:absolute;right:12px;top:16px}
 .st-tag{display:inline-block;color:#fff;font-size:11px;font-weight:800;border-radius:8px;padding:3px 7px;white-space:nowrap}
 .st-k{font-size:10.5px;font-weight:700;color:var(--muted);background:var(--soft);border-radius:7px;padding:2px 6px}
 .st-goal{background:linear-gradient(135deg,#E9F9F3,#E6F5FB)}
@@ -561,7 +566,9 @@ function itemOn(raw, date){
   while ((m = s.match(/\s*\[([^\]]+)\]\s*$/))){
     const tag = strip(m[1].trim().toLowerCase());
     const alt = tag.match(/^alterna(?:\s+([ab]))?$/);
-    if (alt){ if ((alt[1] || 'a').toUpperCase() !== par) ok = false; }
+    const from = tag.match(/^dal\s+(\d{4}-\d{2}-\d{2})$/);
+    if (from){ if (date < from[1]) ok = false; }
+    else if (alt){ if ((alt[1] || 'a').toUpperCase() !== par) ok = false; }
     else {
       const ds = tag.split(/[\s,]+/).filter(Boolean);
       if (!ds.length || !ds.every(x => x in DAY_TAGS)) break;
@@ -583,7 +590,7 @@ function stripTags(raw){
   let s = String(raw).trim().replace(/^[-•]\s*/,''), m;
   while ((m = s.match(/\s*\[([^\]]+)\]\s*$/))){
     const tag = strip(m[1].trim().toLowerCase());
-    if (!/^alterna(\s+[ab])?$/.test(tag)){ const ds = tag.split(/[\s,]+/).filter(Boolean); if (!ds.length || !ds.every(x => x in DAY_TAGS)) break; }
+    if (!/^alterna(\s+[ab])?$/.test(tag) && !/^dal\s+\d{4}-\d{2}-\d{2}$/.test(tag)){ const ds = tag.split(/[\s,]+/).filter(Boolean); if (!ds.length || !ds.every(x => x in DAY_TAGS)) break; }
     s = s.slice(0, m.index);
   }
   return s.trim();
@@ -776,12 +783,13 @@ function renderCatList(kind){
 }
 function catBlocks(list, scope){
   const rows = list.map(c => { const ts = tasksOf(scope, c.id); return {c, ts, open: ts.filter(t => !t.done).length}; });
-  const pin = r => (scope === 'week' && r.c.id === 'studio') ? 1 : 0;
+  const pin = r => (r.c.id === 'studio') ? 1 : 0;
   rows.sort((a,b) => pin(b) - pin(a) || b.open - a.open || b.ts.length - a.ts.length);
   const max = Math.max(1, ...rows.map(r => r.open));
   return rows.map(({c, ts, open}) => {
     const key = scope+':'+c.id; const isOpen = !!S.openCat[key]; const col = catColor(c.id);
-    let h = '<div class="cat'+(isOpen?' open':'')+(open?'':' zero')+'"><button class="cat-h" data-a="catToggle" data-k="'+esc(key)+'"><span class="ring">'+ring(open/max, col, 38, open, '#E8F2F5')+'</span><span class="nm">'+esc(c.name)+((scope === 'week' && c.id === 'studio') ? '<span class="pin" title="Fissato in alto">'+I.pin+'</span>' : '')+'</span><span class="ct">'+(ts.length ? (ts.length-open)+'/'+ts.length : '')+'</span><span class="chev">'+I.chev+'</span></button>';
+    const isSt = c.id === 'studio';
+    let h = '<div class="cat'+(isOpen?' open':'')+(open?'':' zero')+(isSt?' has-go':'')+'"><button class="cat-h" data-a="catToggle" data-k="'+esc(key)+'"><span class="ring">'+ring(open/max, col, 38, open, '#E8F2F5')+'</span><span class="nm">'+esc(c.name)+(isSt ? '<span class="pin" title="Fissato in alto">'+I.pin+'</span>' : '')+'</span><span class="ct">'+(ts.length ? (ts.length-open)+'/'+ts.length : '')+'</span><span class="chev">'+I.chev+'</span></button>'+(isSt ? '<button class="stgo cat-go" data-a="goStudio" aria-label="Apri la sezione Studio">'+I.book+'Apri</button>' : '');
     if (isOpen){
       h += '<div class="cat-b">';
       if (!ts.length) h += '<div class="help">Nessun impegno.</div>';
@@ -1315,7 +1323,8 @@ function sheetDay(date){
     g.items.forEach(it => {
       const i = gi++;
       const canMove = !done.has(it) && postponable(it);
-      b += chkRow(done.has(it), 'data-a="dayChk" data-i="'+i+'"', it, (canMove ? '<button class="act" data-a="rtTomorrow" data-i="'+i+'">Domani →</button>' : '') + '<button class="x more'+(S.rtMenu === i ? ' on' : '')+'" data-a="rtMenu" data-i="'+i+'" aria-label="Opzioni">'+I.dots+'</button>', 'data-drop="rt" data-i="'+i+'"');
+      const goSt = /^STUDIO\b/i.test(it) ? '<button class="stgo" data-a="goStudio" aria-label="Apri la sezione Studio">'+I.book+'Apri</button>' : '';
+      b += chkRow(done.has(it), 'data-a="dayChk" data-i="'+i+'"', it, goSt + (canMove ? '<button class="act" data-a="rtTomorrow" data-i="'+i+'">Domani →</button>' : '') + '<button class="x more'+(S.rtMenu === i ? ' on' : '')+'" data-a="rtMenu" data-i="'+i+'" aria-label="Opzioni">'+I.dots+'</button>', 'data-drop="rt" data-i="'+i+'"');
       if (S.rtMenu === i) b += '<div class="rtmenu"><button class="pill ghost" data-a="rtHide" data-i="'+i+'">Togli solo da questo giorno</button><button class="pill danger" data-a="rtDel" data-i="'+i+'">Elimina dalla routine</button></div>';
       b += extAt(it);
     });
@@ -1415,7 +1424,7 @@ function sheetRoutine(s){
   b += '<textarea class="field" id="routineText" style="min-height:340px" data-focus="routineText">'+esc(val)+'</textarea>';
   b += k === 'week'
     ? '<div class="help">Sotto “IMPEGNI FISSI” metti le cose da fare una volta a settimana, una per riga. Aggiungi [alterna] in fondo a una voce per farla comparire una settimana sì e una no ([alterna B] per le settimane opposte).</div>'
-    : '<div class="help">Una voce per riga. Una riga vuota separa i gruppi. Una riga che inizia con # diventa il titolo di un gruppo (es. # NO DIPENDENZE).<br>In fondo a una voce puoi aggiungere: <b>[lun mer]</b> per farla comparire solo in quei giorni (lun mar mer gio ven sab dom); <b>[alterna A]</b> per le settimane del 16 nov, 30 nov… oppure <b>[alterna B]</b> per quelle del 23 nov, 7 dic… Si possono combinare: PULIZIA CASA [sab] [alterna B].</div>';
+    : '<div class="help">Una voce per riga. Una riga vuota separa i gruppi. Una riga che inizia con # diventa il titolo di un gruppo (es. # NO DIPENDENZE).<br>In fondo a una voce puoi aggiungere: <b>[lun mer]</b> per farla comparire solo in quei giorni (lun mar mer gio ven sab dom); <b>[alterna A]</b> per le settimane del 16 nov, 30 nov… oppure <b>[alterna B]</b> per quelle del 23 nov, 7 dic… Si possono combinare: PULIZIA CASA [sab] [alterna B].<br><b>[dal 2027-02-01]</b> fa comparire la voce solo da quella data in poi.</div>';
   b += '<div class="btns"><button class="pill ghost" data-a="sheetClose">Annulla</button><button class="pill" data-a="routineSave" data-t="'+k+'">Salva</button></div>';
   return sheetFrame('Modifica routine', '', b);
 }
@@ -1540,6 +1549,7 @@ const A = {
   stToday(){ S.stDate = today(); S.stLez = false; render(true); },
   stOpen(el){ S.stDate = el.dataset.d; S.stTab = 'oggi'; S.stLez = false; render(true); const m = $('main'); if (m) m.scrollTop = 0; },
   stChk(el){ stToggle(+el.dataset.i); },
+  goStudio(){ S.sheet = null; S.side = false; S.mete = false; S.view = 'studio'; S.stTab = 'oggi'; S.stDate = today(); S.stLez = false; render(true); const m = $('main'); if (m) m.scrollTop = 0; },
   stLez(){ S.stLez = !S.stLez; render(true); },
   stMat(el){ S.stMatOpen = S.stMatOpen === el.dataset.id ? null : el.dataset.id; render(true); },
   stDub(el){ S.stDubOpen = S.stDubOpen === el.dataset.id ? null : el.dataset.id; render(true); },

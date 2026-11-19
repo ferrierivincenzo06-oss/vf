@@ -304,6 +304,12 @@ select.field{width:100%;appearance:none}
 .fold .ic svg{width:20px;height:20px}
 .fold .nm{flex:1;font-weight:700}
 .fold .ct{color:var(--muted);font-size:12.5px;font-weight:600}
+.swp{position:relative;margin-bottom:8px;border-radius:16px;overflow:hidden}
+.swp:not(.open):not(.drag) .sdel{visibility:hidden}
+.swp .fold{margin-bottom:0;position:relative;z-index:1;transition:transform .22s ease;touch-action:pan-y;will-change:transform}
+.swp.drag .fold{transition:none}
+.swp .sdel{position:absolute;right:0;top:0;bottom:0;width:84px;display:grid;place-items:center;color:#fff;background:#EF4444}
+.swp .sdel svg{width:24px;height:24px}
 .note-i{display:block;width:100%;text-align:left;background:var(--card);border-radius:16px;padding:12px 14px;margin-bottom:8px;box-shadow:0 2px 12px rgba(14,80,110,.06)}
 .note-i b{display:block;margin-bottom:3px}
 .note-i span{color:var(--muted);font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
@@ -386,6 +392,7 @@ const I = {
   notes:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14 3.5V8h5M9 12.5h6M9 16h4"/></svg>',
   folder:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></svg>',
   pin:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.6 2.6a1 1 0 0 1 1.4 0l4.4 4.4a1 1 0 0 1 0 1.4l-1.2 1.2a1 1 0 0 1-1 .25l-3.5 3.5.3 3.6a1 1 0 0 1-.3.8l-1 1a1 1 0 0 1-1.4 0l-3.3-3.3-4.6 4.6a.9.9 0 1 1-1.3-1.3l4.6-4.6-3.3-3.3a1 1 0 0 1 0-1.4l1-1a1 1 0 0 1 .8-.3l3.6.3 3.5-3.5a1 1 0 0 1 .25-1z"/></svg>',
+  trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12.5a1.5 1.5 0 0 0 1.5 1.5h7a1.5 1.5 0 0 0 1.5-1.5L18 7M9 7V4.5h6V7"/></svg>',
   arrowR:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>'
 };
 const PALETTE = ['#0EA5C9','#14C2A8','#38BDF8','#10B981','#F59E0B','#06B6D4','#22C55E','#3B82F6','#2DD4BF','#F97316'];
@@ -902,8 +909,9 @@ function renderNotes(){
   if (!folders.length) h += '<div class="empty">Ancora nessuna cartella. Creane una qui sotto.</div>';
   folders.forEach((f,i) => {
     const n = notes.filter(x => x.folder === f.id).length;
-    h += '<button class="fold" data-a="folderOpen" data-id="'+f.id+'"><span class="ic" style="background:'+PALETTE[i%PALETTE.length]+'">'+I.folder+'</span><span class="nm">'+esc(f.name)+'</span><span class="ct">'+n+'</span></button>';
+    h += '<div class="swp"><button class="sdel" data-a="folderDel" data-id="'+f.id+'" aria-label="Elimina cartella">'+I.trash+'</button><button class="fold" data-a="folderOpen" data-id="'+f.id+'"><span class="ic" style="background:'+PALETTE[i%PALETTE.length]+'">'+I.folder+'</span><span class="nm">'+esc(f.name)+'</span><span class="ct">'+n+'</span></button></div>';
   });
+  if (folders.length) h += '<div class="help">Per eliminare una cartella, scorrila verso sinistra e tocca il cestino rosso.</div>';
   h += '<form class="add" data-f="folderAdd" style="margin-top:12px"><input name="t" placeholder="Nuova cartella…" autocomplete="off" data-focus="folderAdd"><button aria-label="Crea cartella">'+I.plus+'</button></form>';
   return h;
 }
@@ -1374,7 +1382,8 @@ const A = {
   folderSave(el){ const name = $('folderName').value.trim(); if (!name) return; putCfg({noteFolders:(cfg().noteFolders||[]).map(f => f.id === el.dataset.id ? Object.assign({}, f, {name}) : f)}); closeSheet(); render(true); },
   folderDel(el){
     const id = el.dataset.id;
-    confirmBox('Elimina cartella', 'Elimino la cartella e tutte le sue note?', 'Elimina', () => {
+    const fo = (cfg().noteFolders || []).find(f => f.id === id); const nn = Object.values(S.c.notes).filter(n => n.folder === id).length;
+    confirmBox('Elimina cartella', 'Sei sicuro di eliminare la cartella “'+(fo ? fo.name : '')+'”'+(nn === 1 ? ' e la sua nota' : nn ? ' e le sue '+nn+' note' : '')+'?', 'Elimina', () => {
       Object.entries(S.c.notes).forEach(([nid, n]) => { if (n.folder === id) del('notes/'+nid); });
       putCfg({noteFolders:(cfg().noteFolders||[]).filter(f => f.id !== id)}); S.folder = null;
     }, true);
@@ -1392,6 +1401,37 @@ const A = {
   sheetClose(){ const back = S.sheet && S.sheet.back; S.sheet = back && back.type === 'day' ? back : null; render(true); },
   sheetBg(el, ev){ if (ev.target === el) A.sheetClose(); }
 };
+/* cartelle note: scorri a sinistra per mostrare il cestino */
+(function(){
+  let row = null, x0 = 0, y0 = 0, base = 0, dx = 0, mode = '', swiped = 0;
+  const OPEN = -84;
+  const closeAll = except => document.querySelectorAll('.swp.open').forEach(w => { if (w !== except){ w.classList.remove('open'); w.querySelector('.fold').style.transform = ''; } });
+  document.addEventListener('pointerdown', ev => {
+    const f = ev.target.closest && ev.target.closest('.swp .fold'); if (!f){ if (!(ev.target.closest && ev.target.closest('.swp'))) closeAll(); return; }
+    row = f.parentNode; x0 = ev.clientX; y0 = ev.clientY; base = row.classList.contains('open') ? OPEN : 0; dx = 0; mode = '';
+  });
+  document.addEventListener('pointermove', ev => {
+    if (!row) return;
+    const mx = ev.clientX - x0, my = ev.clientY - y0;
+    if (!mode){ if (Math.abs(mx) > 8 && Math.abs(mx) > Math.abs(my)) { mode = 'x'; row.classList.add('drag'); closeAll(row); } else if (Math.abs(my) > 8) { row = null; return; } else return; }
+    dx = Math.max(OPEN - 20, Math.min(0, base + mx));
+    row.querySelector('.fold').style.transform = 'translateX('+dx+'px)';
+  });
+  const end = () => {
+    if (!row) return;
+    if (mode === 'x'){
+      const open = dx < OPEN / 2; row.classList.remove('drag'); row.classList.toggle('open', open);
+      row.querySelector('.fold').style.transform = open ? 'translateX('+OPEN+'px)' : ''; swiped = Date.now();
+    }
+    row = null; mode = '';
+  };
+  document.addEventListener('pointerup', end); document.addEventListener('pointercancel', end);
+  document.addEventListener('click', ev => {
+    if (Date.now() - swiped < 350){ ev.stopPropagation(); ev.preventDefault(); return; }
+    const f = ev.target.closest && ev.target.closest('.swp.open .fold');
+    if (f){ ev.stopPropagation(); ev.preventDefault(); closeAll(); }
+  }, true);
+})();
 document.addEventListener('click', ev => {
   const el = ev.target.closest('[data-a]'); if (!el) return;
   const fn = A[el.dataset.a]; if (!fn) return;

@@ -35,6 +35,12 @@
                  prep:{sub,intro,ingredients:[[nome,qta]],steps:[testo],note}, shopping:[{id,text,qty}], blocks:[{title,rows:[[k,v]]}] }
   pages/mete items[].details? { title, cols:[..], rows:[{c:[..],hl?}], note } → pulsante "Vedi dettagli"
   notes/<id>  { folder, title, body, updatedAt }
+  studio/piano   { giorni:{ 'YYYY-MM-DD':{ blocchi:[{inizio,fine,materia,tipo:'teoria'|'esercizi'|'lezione'|'gruppo'|'recupero'|'ripasso'|'pausa'|'report',cosa,come?,strumenti?}], obiettivo_minimo, nota?, schema?:'pieno', codici } },
+                   giorni_off, materie, metodo_default:{teoria,esercizi,strumenti_teoria,strumenti_esercizi,schema_pieno} }  (pagina Studio)
+  studio/legenda { strumenti:[{icona,nome,cosa,come}], metodo:[{nome,come}], materie:[{nome,come}] }
+  studio_giorni/<YYYY-MM-DD> { data, blocchi:[...+done], obiettivo_minimo, ripasso_domande:[..], lezione_analisi:{numero,titolo,testo}, report:{testo,feedback?} } (scritto dal messaggio del mattino e dalla chat Studio)
+  studio_dubbi/<id> { data, materia, testo, stato:'aperto'|'chiuso', spiegazione, pianificato_per }
+  studio_materiali/<id> { materia, titolo, ordine, per?:'YYYY-MM-DD', testo (markdown) } (spiegazioni complete, schede, domande)
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -202,6 +208,62 @@ body.tdrag *{cursor:grabbing!important}
 .ring b{font-size:12px;font-weight:800;position:relative}
 .mini{font-size:12.5px;font-weight:700;color:var(--violet)}
 .row-btns{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px}
+/* studio */
+.st-tag{display:inline-block;color:#fff;font-size:11px;font-weight:800;border-radius:8px;padding:3px 7px;white-space:nowrap}
+.st-k{font-size:10.5px;font-weight:700;color:var(--muted);background:var(--soft);border-radius:7px;padding:2px 6px}
+.st-goal{background:linear-gradient(135deg,#E9F9F3,#E6F5FB)}
+.st-goal b{display:block;margin-bottom:4px}
+.st-rep{background:#FFF8EB}
+.st-day{padding:8px 14px}
+.st-b{display:flex;gap:10px;align-items:flex-start;padding:11px 0;border-top:1px solid #EEF5F7}
+.st-b:first-child{border-top:0}
+.st-b .box{flex:none;width:26px;height:26px;border-radius:9px;border:2px solid #C9DCE3;display:grid;place-items:center;color:transparent;margin-top:2px}
+.st-b .box svg{width:16px;height:16px}
+.st-b.done .box{background:var(--mint);border-color:var(--mint);color:#fff}
+.st-b.done .st-cosa{text-decoration:line-through;color:var(--muted)}
+.st-bc{flex:1;min-width:0}
+.st-bt{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px}
+.st-bt .tm,.st-pause .tm{font-size:12px;font-weight:800;color:var(--muted)}
+.st-cosa{font-weight:600;line-height:1.4}
+.st-come{font-size:12.5px;line-height:1.45;color:#3E5661;margin-top:5px;background:var(--soft);border-radius:10px;padding:7px 9px}
+.st-str{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.4}
+.st-pause{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-top:1px solid #EEF5F7;font-size:13px;color:#5B7480}
+.st-day .st-pause:first-child{border-top:0}
+.st-pr{margin:8px 0 12px}
+.st-prh{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;font-weight:700;color:var(--muted);margin-bottom:6px}
+.st-wk{padding:4px 10px}
+.st-pd{width:100%;display:flex;gap:10px;text-align:left;padding:10px 4px;border-top:1px solid #EEF5F7}
+.st-wk .st-pd:first-child{border-top:0}
+.st-pd.today{background:#E1F4F8;border-radius:12px}
+.st-pd.off{opacity:.6}
+.st-pdd{flex:none;width:58px;font-weight:800;font-size:13px}
+.st-pdd small{display:block;font-weight:700;color:var(--muted);font-size:11px;margin-top:2px}
+.st-pdb{flex:1;min-width:0;font-size:12.5px;line-height:1.4}
+.st-pdr{display:flex;gap:6px;align-items:flex-start;margin-bottom:4px}
+.st-pdr span:last-child{flex:1;color:#3E5661}
+.st-pdn{color:var(--muted);margin-bottom:4px}
+.st-leg{padding:8px 0;border-top:1px solid #EEF5F7}
+.st-leg:first-of-type{border-top:0}
+.st-legh{margin-bottom:3px}
+.st-legc{font-size:13px;line-height:1.45;color:#3E5661;margin-top:3px}
+.st-li{padding-left:14px;position:relative;line-height:1.5;margin:3px 0}
+.st-li:not(.n):before{content:'';position:absolute;left:3px;top:.65em;width:5px;height:5px;border-radius:50%;background:var(--pink)}
+.st-li.n{padding-left:0}
+.st-dub{display:block;width:100%;text-align:left;padding:10px 0;border-top:1px solid #EEF5F7}
+.st-dub:first-child{border-top:0}
+.st-md{line-height:1.55;font-size:14.5px}
+.st-md .st-h1{font-size:19px;font-weight:800;margin:14px 0 6px;color:var(--violet)}
+.st-md .st-h2{font-size:16.5px;font-weight:800;margin:14px 0 6px;color:var(--violet)}
+.st-md .st-h3{font-size:15px;font-weight:800;margin:12px 0 4px}
+.st-md .gap{height:8px}
+.st-md code{background:var(--soft);border-radius:5px;padding:1px 4px;font-size:13px}
+.st-md .st-q{border-left:3px solid var(--pink);padding:4px 10px;margin:6px 0;background:#F3FBF8;border-radius:0 8px 8px 0}
+.st-md hr{border:0;border-top:1px solid var(--line);margin:12px 0}
+.st-tw{overflow-x:auto;margin:8px 0}
+.st-t{border-collapse:collapse;font-size:13px;min-width:100%}
+.st-t th,.st-t td{border:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+.st-t th{background:var(--soft);font-weight:800}
+.st-seg button{font-size:12.5px;padding:9px 2px}
 /* bottom nav */
 .bnav{position:fixed;left:0;right:0;bottom:0;z-index:30;padding:6px 6px calc(6px + var(--sb));display:flex;justify-content:center;transform:translateY(120%);transition:transform .28s cubic-bezier(.2,.8,.2,1);pointer-events:none}
 .bnav.show{transform:none}
@@ -393,6 +455,7 @@ const I = {
   folder:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></svg>',
   pin:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.6 2.6a1 1 0 0 1 1.4 0l4.4 4.4a1 1 0 0 1 0 1.4l-1.2 1.2a1 1 0 0 1-1 .25l-3.5 3.5.3 3.6a1 1 0 0 1-.3.8l-1 1a1 1 0 0 1-1.4 0l-3.3-3.3-4.6 4.6a.9.9 0 1 1-1.3-1.3l4.6-4.6-3.3-3.3a1 1 0 0 1 0-1.4l1-1a1 1 0 0 1 .8-.3l3.6.3 3.5-3.5a1 1 0 0 1 .25-1z"/></svg>',
   trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12.5a1.5 1.5 0 0 0 1.5 1.5h7a1.5 1.5 0 0 0 1.5-1.5L18 7M9 7V4.5h6V7"/></svg>',
+  book:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2 2 0 0 1 6 3.5h13v14H6a2 2 0 0 0-2 2z"/><path d="M4 19.5a2 2 0 0 0 2 2h13v-4"/><path d="M9 8h6"/></svg>',
   arrowR:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>'
 };
 const PALETTE = ['#0EA5C9','#14C2A8','#38BDF8','#10B981','#F59E0B','#06B6D4','#22C55E','#3B82F6','#2DD4BF','#F97316'];
@@ -439,10 +502,10 @@ function toast(msg){
 }
 
 /* ---------- state ---------- */
-const COLS = ['config','pages','days','weeks','tasks','notes'];
+const COLS = ['config','pages','days','weeks','tasks','notes','studio','studio_giorni','studio_dubbi','studio_materiali'];
 const S = {
   db:null, dl:null, status:'loading', got:{},
-  c:{config:{},pages:{},days:{},weeks:{},tasks:{},notes:{}},
+  c:{config:{},pages:{},days:{},weeks:{},tasks:{},notes:{},studio:{},studio_giorni:{},studio_dubbi:{},studio_materiali:{}},
   view:'tempo', month: ym(today()), side:false, tab: lsGet('tab','week'), bottom:false,
   openCat: lsGet('openCat', {}), mete:false, sheet:null, fisTab:'fisico', editPage:null, folder:null
 };
@@ -627,7 +690,7 @@ function render(force){
   renderSheet(force);
 }
 function renderBottom(){
-  const items = [['tempo','cal','Tempo'],['mete','target','Mete'],['soldi','money','Soldi'],['fisico','body','Fisico'],['note','notes','Note']];
+  const items = [['tempo','cal','Tempo'],['mete','target','Mete'],['studio','book','Studio'],['soldi','money','Soldi'],['fisico','body','Fisico'],['note','notes','Note']];
   $('bnavIn').innerHTML = items.map(([k,ic,l]) => '<button class="'+((k === 'mete' ? S.mete : (S.view === k && !S.mete)) ? 'on' : '')+'" data-a="nav" data-v="'+k+'">'+I[ic]+l+'</button>').join('');
 }
 function renderMain(){
@@ -637,6 +700,7 @@ function renderMain(){
   let pre = '';
   if (S.status === 'slow') pre = '<div class="banner"><span class="em">⏳</span><div class="tx">I dati ci stanno mettendo un po’ ad arrivare: quello che vedi potrebbe non essere aggiornato.</div></div>';
   if (S.view === 'tempo') return pre + renderCalendar();
+  if (S.view === 'studio') return pre + renderStudio();
   if (S.view === 'soldi') return pre + renderSoldi();
   if (S.view === 'fisico') return pre + renderFisico();
   if (S.view === 'note') return pre + renderNotes();
@@ -914,6 +978,264 @@ function renderNotes(){
   if (folders.length) h += '<div class="help">Per eliminare una cartella, scorrila verso sinistra e tocca il cestino rosso.</div>';
   h += '<form class="add" data-f="folderAdd" style="margin-top:12px"><input name="t" placeholder="Nuova cartella…" autocomplete="off" data-focus="folderAdd"><button aria-label="Crea cartella">'+I.plus+'</button></form>';
   return h;
+}
+
+/* ---------- studio ---------- */
+const ST_COL = {'Meccanica razionale':'#0EA5C9','Fisica 2':'#8B5CF6','Topografia':'#10B981','Analisi 1':'#F59E0B','Ripasso':'#38BDF8','Recupero':'#F97316','Report':'#14C2A8'};
+const ST_MAT = ['Meccanica razionale','Topografia','Fisica 2'];
+const stPiano = () => (S.c.studio || {}).piano || {};
+const stLeg = () => (S.c.studio || {}).legenda || {};
+const stStudyB = b => b && (b.tipo === 'teoria' || b.tipo === 'esercizi' || b.tipo === 'lezione' || b.tipo === 'gruppo' || b.tipo === 'recupero' || b.tipo === 'ripasso');
+function stFrame(b){
+  const map = {'Ripasso':['ripasso','Domande di ripasso sul giorno prima (le trovi nel messaggio del mattino).'],'Analisi 1':['lezione','Lezione di Analisi del giorno: metodo sul quaderno + 3 esercizi.'],'Pausa':['pausa','Pausa: alzati, acqua, niente telefono.'],'Pranzo + riposo':['pausa','Pranzo 40 min + riposo 20 min.'],'Report a Claude':['report','Report a Claude nella chat del progetto Studio: cosa hai fatto, cosa no, com’è andata.']};
+  const m = map[b[2]] || ['pausa', b[2]];
+  return {inizio:b[0], fine:b[1], materia: b[2] === 'Pranzo + riposo' ? 'Pranzo' : (b[2] === 'Report a Claude' ? 'Report' : b[2]), tipo:m[0], cosa:m[1]};
+}
+function stPlanDay(d){
+  const g = (stPiano().giorni || {})[d]; if (!g) return null;
+  let bl = (g.blocchi || []).slice();
+  if (g.schema === 'pieno'){
+    const fr = ((stPiano().metodo_default || {}).schema_pieno || []).map(stFrame);
+    bl = bl.concat(fr).sort((a,b) => a.inizio < b.inizio ? -1 : a.inizio > b.inizio ? 1 : 0);
+  }
+  return {blocchi: bl, obiettivo_minimo: g.obiettivo_minimo, nota: g.nota, codici: g.codici};
+}
+function stDay(d){
+  const real = (S.c.studio_giorni || {})[d];
+  const plan = stPlanDay(d);
+  if (real && (real.blocchi || []).length){
+    let bl = real.blocchi;
+    const g = (stPiano().giorni || {})[d];
+    if (g && g.schema === 'pieno' && !bl.some(b => b.tipo === 'pausa' || b.tipo === 'report')){
+      const have = new Set(bl.map(b => b.inizio));
+      const fr = ((stPiano().metodo_default || {}).schema_pieno || []).map(stFrame).filter(b => !have.has(b.inizio)).map(b => Object.assign(b, {_f:true}));
+      bl = bl.map((b, i) => Object.assign({_i:i}, b)).concat(fr).sort((a,b) => a.inizio < b.inizio ? -1 : a.inizio > b.inizio ? 1 : 0);
+    }
+    return Object.assign({}, plan || {}, real, {blocchi: bl, real:true});
+  }
+  return plan ? Object.assign({}, plan, real || {}) : (real || null);
+}
+function stCome(b){
+  if (b.come) return b.come;
+  const md = stPiano().metodo_default || {};
+  return ((md[b.tipo] || {})[b.materia]) || '';
+}
+function stStr(b){
+  if (b.strumenti) return b.strumenti;
+  const md = stPiano().metodo_default || {};
+  return b.tipo === 'teoria' ? (md.strumenti_teoria || '') : b.tipo === 'esercizi' ? (md.strumenti_esercizi || '') : '';
+}
+function stDoneAll(){
+  // conta, per materia, i blocchi di studio fatti su quelli previsti nel piano
+  const res = {}; ST_MAT.forEach(m => res[m] = {done:0, tot:0});
+  const giorni = stPiano().giorni || {};
+  Object.keys(giorni).forEach(d => {
+    const day = stDay(d); if (!day) return;
+    (day.blocchi || []).forEach(b => { if (res[b.materia] && (b.tipo === 'teoria' || b.tipo === 'esercizi')){ res[b.materia].tot++; if (b.done) res[b.materia].done++; } });
+  });
+  return res;
+}
+function stMd(t){
+  // markdown semplice → html (titoli, grassetto, elenchi, tabelle, citazioni)
+  if (!t) return '';
+  const inl = s => esc(s).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/\*(.+?)\*/g,'<i>$1</i>').replace(/`(.+?)`/g,'<code>$1</code>');
+  const L = t.split('\n'); let h = '', i = 0;
+  while (i < L.length){
+    const s = L[i];
+    if (/^\s*\|/.test(s)){
+      const rows = []; while (i < L.length && /^\s*\|/.test(L[i])){ rows.push(L[i]); i++; }
+      const cells = r => r.trim().replace(/^\||\|$/g,'').split('|').map(c => c.trim());
+      const body = rows.filter(r => !/^\s*\|[\s:\-|]+\|\s*$/.test(r));
+      h += '<div class="st-tw"><table class="st-t">' + body.map((r,k) => '<tr>'+cells(r).map(c => (k===0?'<th>':'<td>')+inl(c)+(k===0?'</th>':'</td>')).join('')+'</tr>').join('') + '</table></div>';
+      continue;
+    }
+    if (/^#{1,6}\s/.test(s)){ const n = s.match(/^#+/)[0].length; h += '<div class="st-h'+Math.min(n,3)+'">'+inl(s.replace(/^#+\s*/,''))+'</div>'; }
+    else if (/^\s*[-*•]\s+/.test(s)) h += '<div class="st-li">'+inl(s.replace(/^\s*[-*•]\s+/,''))+'</div>';
+    else if (/^\s*\d+[.)]\s+/.test(s)) h += '<div class="st-li n"><b>'+s.trim().match(/^\d+/)[0]+'.</b> '+inl(s.replace(/^\s*\d+[.)]\s+/,''))+'</div>';
+    else if (/^>\s?/.test(s)) h += '<div class="st-q">'+inl(s.replace(/^>\s?/,''))+'</div>';
+    else if (/^---+$/.test(s.trim())) h += '<hr>';
+    else if (!s.trim()) h += '<div class="gap"></div>';
+    else h += '<div>'+inl(s)+'</div>';
+    i++;
+  }
+  return '<div class="st-md">'+h+'</div>';
+}
+function stTag(m){ return '<span class="st-tag" style="background:'+(ST_COL[m] || '#7A8D96')+'">'+esc(m)+'</span>'; }
+
+function renderStudio(){
+  if (!S.stTab) S.stTab = 'oggi';
+  if (!S.stDate) S.stDate = today();
+  let h = '<div class="page-h"><h1>📚 Studio</h1></div>';
+  const tabs = [['oggi','Oggi'],['piano','Piano'],['mat','Materiali'],['guida','Guida'],['dubbi','Dubbi']];
+  h += '<div class="seg st-seg">'+tabs.map(([k,l]) => '<button class="'+(S.stTab===k?'on':'')+'" data-a="stTab" data-t="'+k+'">'+l+'</button>').join('')+'</div>';
+  if (!stPiano().giorni) return h + '<div class="card"><div class="empty">Il piano di studio non è ancora arrivato. Controlla la connessione e riapri VF.</div></div>';
+  if (S.stTab === 'oggi') return h + renderStOggi();
+  if (S.stTab === 'piano') return h + renderStPiano();
+  if (S.stTab === 'guida') return h + renderStGuida();
+  if (S.stTab === 'mat') return h + renderStMat();
+  return h + renderStDubbi();
+}
+
+function renderStOggi(){
+  const d = S.stDate; const day = stDay(d); const off = (stPiano().giorni_off || {})[d];
+  const isT = d === today();
+  let h = '<div class="card"><div class="wnav"><button class="ibtn" data-a="stPrev" aria-label="Giorno precedente">'+I.left+'</button><div class="wnav-t"><b>'+esc(cap(fmt(d,{weekday:'long', day:'numeric', month:'long'})))+'</b><span>'+(isT ? 'Oggi' : (d < today() ? 'Giorno passato' : 'Giorno futuro'))+'</span></div><button class="ibtn" data-a="stNext" aria-label="Giorno successivo">'+I.right+'</button></div>' + (isT ? '' : '<div style="text-align:center;margin:-2px 0 4px"><button class="mini" data-a="stToday">↩ Torna a oggi</button></div>');
+  if (!day){
+    const wd = parseD(d).getDay();
+    h += '<div class="empty" style="padding:14px 6px">'+(off ? '🧳 '+esc(off)+': niente studio.' : (wd === 5 ? '💼 Venerdì: lavoro, niente studio.' : wd === 0 ? '😌 Domenica libera.' : 'Nessun blocco di studio previsto in questo giorno.'))+'</div></div>';
+    return h + stProgressCard();
+  }
+  const bl = day.blocchi || [];
+  const sb = bl.filter(b => !b._f && (b.tipo === 'teoria' || b.tipo === 'esercizi' || b.tipo === 'lezione' || b.tipo === 'gruppo' || b.tipo === 'recupero'));
+  h += progress(sb.filter(b => b.done).length, sb.length) + '</div>';
+  if (day.nota) h += '<div class="banner"><span class="em">📌</span><div class="tx">'+esc(day.nota)+'</div></div>';
+  if (day.obiettivo_minimo) h += '<div class="card st-goal"><b>🎯 Obiettivo minimo</b><div>'+esc(day.obiettivo_minimo)+'</div><div class="help" style="margin:6px 0 0">Se arrivi almeno qui, la giornata è buona anche se non hai finito tutto.</div></div>';
+  if (!day.real && d >= today()) h += '<div class="help" style="margin:0 2px 10px">ℹ️ Questa è la versione del piano generale. La mattina, quando arriva il messaggio, Claude la aggiorna in base ai tuoi report (recuperi, dubbi da chiarire).</div>';
+  h += '<div class="card st-day">';
+  bl.forEach((b, i) => {
+    const study = !b._f && (b.tipo === 'teoria' || b.tipo === 'esercizi' || b.tipo === 'lezione' || b.tipo === 'gruppo' || b.tipo === 'recupero');
+    if (!study){
+      h += '<div class="st-pause"><span class="tm">'+esc(b.inizio)+(b.fine ? '–'+esc(b.fine) : '')+'</span><span>'+(b.tipo === 'report' ? '📝 ' : b.materia === 'Pranzo' ? '🍽️ ' : b.tipo === 'ripasso' ? '🔁 ' : b.tipo === 'lezione' ? '📐 ' : '☕ ')+esc(b.cosa || b.materia)+'</span></div>';
+      return;
+    }
+    const come = stCome(b), str = stStr(b);
+    h += '<div class="st-b'+(b.done?' done':'')+'"><button class="box" data-a="stChk" data-i="'+(b._i != null ? b._i : i)+'" data-r="'+(b._i != null ? 1 : 0)+'" aria-label="Spunta">'+I.check+'</button><div class="st-bc"><div class="st-bt"><span class="tm">'+esc(b.inizio)+'–'+esc(b.fine)+'</span>'+stTag(b.materia)+(b.tipo === 'esercizi' ? '<span class="st-k">esercizi</span>' : b.tipo === 'teoria' ? '<span class="st-k">teoria</span>' : '')+'</div><div class="st-cosa">'+esc(b.cosa)+'</div>'+(come ? '<div class="st-come"><b>Come:</b> '+esc(come)+'</div>' : '')+(str ? '<div class="st-str">'+esc(str)+'</div>' : '')+'</div></div>';
+  });
+  h += '</div>';
+  if ((day.ripasso_domande || []).length) h += '<div class="card"><h3>🔁 Domande di ripasso (8:00)</h3>'+day.ripasso_domande.map((q,k) => '<div class="st-li n"><b>'+(k+1)+'.</b> '+esc(q)+'</div>').join('')+'<div class="help">Rispondi a memoria sul quaderno, poi controlla.</div></div>';
+  const lz = day.lezione_analisi;
+  if (lz && lz.testo){
+    h += '<div class="card"><button class="bigb" data-a="stLez"><span>📐 '+esc(lz.titolo || ('Analisi 1 · Lezione '+(lz.numero || '')))+'</span>'+(S.stLez ? I.up : I.chev)+'</button>'+(S.stLez ? '<div style="margin-top:12px">'+stMd(lz.testo)+'</div>' : '')+'</div>';
+  }
+  if (day.report){
+    const r = typeof day.report === 'string' ? day.report : (day.report.testo || '');
+    h += '<div class="card"><h3>📝 Il tuo report</h3><div class="rt">'+esc(r)+'</div>'+(day.report.feedback ? '<div class="help" style="margin-top:8px"><b>Claude:</b> '+esc(day.report.feedback)+'</div>' : '')+'</div>';
+  } else if (d <= today()) h += '<div class="card st-rep"><b>📝 Report delle 17:30</b><div class="help" style="margin:4px 0 0">Scrivi due righe a Claude nella chat del progetto <b>Studio</b>: cosa hai fatto, cosa no, com’è andata. Claude segna i blocchi e domani adatta il piano.</div></div>';
+  const dub = Object.entries(S.c.studio_dubbi || {}).filter(([id,x]) => x.stato !== 'chiuso');
+  if (dub.length) h += '<div class="card"><h3>❓ Dubbi aperti ('+dub.length+')<span class="sub"><button class="mini" data-a="stTab" data-t="dubbi">Vedi</button></span></h3><div class="help" style="margin:0">Claude li mette nel piano del giorno dopo (15 minuti ciascuno).</div></div>';
+  return h + stProgressCard();
+}
+function stProgressCard(){
+  const r = stDoneAll();
+  let h = '<div class="sec-t">Avanzamento fino al 30 dicembre</div><div class="card">';
+  ST_MAT.forEach(m => { const x = r[m]; const p = x.tot ? Math.round(x.done/x.tot*100) : 0;
+    h += '<div class="st-pr"><div class="st-prh">'+stTag(m)+'<span>'+x.done+' / '+x.tot+' blocchi · '+p+'%</span></div><div class="prog"><i style="width:'+p+'%;background:'+ST_COL[m]+'"></i></div></div>'; });
+  h += '<div class="help">Un blocco conta come fatto quando lo spunti qui o quando lo segna Claude dal tuo report.</div></div>';
+  return h;
+}
+
+function renderStPiano(){
+  const P = stPiano(); const giorni = P.giorni || {}; const off = P.giorni_off || {};
+  let h = '<div class="card"><h3>🗓️ Il programma fino al 30 dicembre</h3><div class="help" style="margin:0">'+esc(P.obiettivo || '')+' Tocca un giorno per aprirlo in “Oggi”.</div></div>';
+  const all = Object.keys(giorni).concat(Object.keys(off)).filter((v,i,a) => a.indexOf(v) === i).sort();
+  let wk = null;
+  all.forEach(d => {
+    const w = mondayOf(d);
+    if (w !== wk){ if (wk) h += '</div>'; wk = w; h += '<div class="sec-t">Settimana dal '+esc(fmt(w,{day:'numeric', month:'long'}))+'</div><div class="card st-wk">'; }
+    const isT = d === today(); const day = stDay(d);
+    if (!day){ h += '<div class="st-pd off"><div class="st-pdd">'+esc(cap(fmt(d,{weekday:'short', day:'numeric'})))+'</div><div class="st-pdb">🧳 '+esc(off[d])+'</div></div>'; return; }
+    const sb = (day.blocchi || []).filter(b => b.tipo === 'teoria' || b.tipo === 'esercizi' || b.tipo === 'gruppo' || b.tipo === 'recupero');
+    const done = sb.filter(b => b.done).length;
+    const seen = {}; const rows = [];
+    sb.forEach(b => { const k = b.materia; if (!seen[k]){ seen[k] = []; rows.push(k); } seen[k].push(b.cosa); });
+    h += '<button class="st-pd'+(isT?' today':'')+'" data-a="stOpen" data-d="'+d+'"><div class="st-pdd">'+esc(cap(fmt(d,{weekday:'short', day:'numeric'})))+(sb.length ? '<small>'+done+'/'+sb.length+'</small>' : '')+'</div><div class="st-pdb">'+(day.nota ? '<div class="st-pdn">📌 '+esc(day.nota)+'</div>' : '')+rows.map(m => '<div class="st-pdr">'+stTag(m)+'<span>'+esc(seen[m].map(c => c.split(':')[0].replace(/\s*\(.*$/,'')).join(' · '))+'</span></div>').join('')+'</div></button>';
+  });
+  if (wk) h += '</div>';
+  h += '<div class="sec-t">Gennaio: prima di ogni esame</div><div class="card">'+ST_MAT.map(m => { const x = (P.materie || {})[m] || {}; return '<div class="st-pdr" style="margin:6px 0">'+stTag(m)+'<span>'+esc(x.gennaio || '')+'</span></div>'; }).join('')+'</div>';
+  return h;
+}
+
+function renderStGuida(){
+  const L = stLeg(); const P = stPiano();
+  let h = '';
+  h += '<div class="card"><h3>👋 Come funziona lo studio</h3><div class="rt">' +
+    '<div>Tu studi, Claude ti segue. Ogni giorno sai esattamente <b>cosa</b> studiare, <b>come</b> e con quali <b>strumenti</b>. Ogni sera mandi due righe di report e il giorno dopo il piano si adatta.</div>' +
+    '<div class="h">Le 3 cose che usi</div>' +
+    '<div class="b"><b>Messaggio del mattino</b> (attività programmata, lun–gio e sabato alle 6:41): piano del giorno + lezione di Analisi. Leggilo appena sveglio.</div>' +
+    '<div class="b"><b>VF › Studio</b> (questa pagina): il piano di oggi da spuntare, il programma completo, i materiali di Claude, questa guida, i dubbi.</div>' +
+    '<div class="b"><b>Chat del progetto Studio</b> su Claude: l’unico posto dove scrivi tu. Dubbi, domande, foto degli esercizi, report delle 17:30.</div>' +
+    '</div></div>';
+  h += '<div class="card"><h3>🕗 La tua giornata tipo (lun–gio)</h3>' + [
+    ['Appena sveglio','Leggi il messaggio del mattino (piano + lezione di Analisi).'],
+    ['8:00–8:15','Ripasso: rispondi a memoria alle domande sul giorno prima.'],
+    ['8:15–9:15','Analisi 1: lezione del giorno, metodo sul quaderno, 3 esercizi.'],
+    ['9:15–12:30','Materia A (pausa 10:45–11:00). Prima la teoria, poi gli esercizi.'],
+    ['12:30–13:30','Pranzo (40 min) + riposo (20 min).'],
+    ['13:30–17:30','Materia B (pausa 15:30–15:45).'],
+    ['17:30','Report a Claude nella chat del progetto Studio.'],
+    ['Sera','Lezione di finanza (arriva la mattina, la leggi dopo cena).']
+  ].map(([t,x]) => '<div class="st-pause"><span class="tm" style="min-width:86px">'+t+'</span><span>'+x+'</span></div>').join('') +
+  '<div class="help">Venerdì: lavoro, niente studio. Sabato 9:30–12:30: recupero o avanti col programma. Domenica libera.</div></div>';
+  h += '<div class="card"><h3>❓ Quando ti blocchi (regola dei 25 minuti)</h3><div class="rt">' +
+    '<div class="b">Se da più di <b>25 minuti</b> non capisci una cosa, scrivi nella chat del progetto Studio: <b>“? materia, cosa non capisci”</b>. Puoi anche dettarlo a voce.</div>' +
+    '<div class="b"><b>Vai avanti</b> col paragrafo dopo, senza aspettare.</div>' +
+    '<div class="b">Alla pausa leggi la risposta. Se serve più tempo, Claude mette 15 minuti nel piano di domani. Il dubbio compare in “❓ Dubbi” finché non è chiuso.</div>' +
+    '<div class="b">Per l’esame basta capire bene l’80% e saperlo applicare: il resto si sistema nel ripasso.</div>' +
+    '</div></div>';
+  h += '<div class="card"><h3>🤖 Come usare Claude</h3><div class="rt">' +
+    '<div class="b"><b>Foto di un esercizio</b> che hai fatto → te lo corregge e ti dice dove hai sbagliato.</div>' +
+    '<div class="b"><b>“Rispiegami …”</b> → una spiegazione diversa, con un esempio.</div>' +
+    '<div class="b"><b>“Interrogami su …”</b> → domande come il prof (soprattutto prima degli orali).</div>' +
+    '<div class="b"><b>Report delle 17:30</b> → “Fatto: … Non fatto: … Com’è andata: …”.</div>' +
+    '<div class="b"><b>Impegni nuovi</b> (“giovedì non posso studiare”) → Claude sposta il piano.</div>' +
+    '<div class="b">Non chiedere la soluzione prima di averci provato: ti toglie l’allenamento che serve all’esame.</div>' +
+    '</div></div>';
+  if ((L.strumenti || []).length) h += '<div class="card"><h3>🧰 Gli strumenti</h3>'+L.strumenti.map(s => '<div class="st-leg"><div class="st-legh">'+esc(s.icona || '')+' <b>'+esc(s.nome)+'</b> — '+esc(s.cosa || '')+'</div><div class="st-legc">'+esc(s.come || '')+'</div></div>').join('')+'</div>';
+  if ((L.metodo || []).length) h += '<div class="card"><h3>🧠 I metodi</h3>'+L.metodo.map(s => '<div class="st-leg"><div class="st-legh"><b>'+esc(s.nome)+'</b></div><div class="st-legc">'+esc(s.come || '')+'</div></div>').join('')+'</div>';
+  const M = P.materie || {};
+  h += '<div class="card"><h3>📘 Come si studia ogni materia</h3>' + (L.materie || []).map(s => { const x = M[s.nome] || {}; return '<div class="st-leg"><div class="st-legh">'+(ST_COL[s.nome] ? stTag(s.nome) : '<b>'+esc(s.nome)+'</b>')+'</div><div class="st-legc">'+esc(s.come || '')+'</div>'+(x.esame ? '<div class="st-legc"><b>Esame:</b> '+esc(x.esame)+'</div>' : '')+(x.consultazione ? '<div class="st-legc"><b>Solo da consultare:</b> '+esc(x.consultazione)+'</div>' : '')+'</div>'; }).join('') + '</div>';
+  h += '<div class="card"><h3>🗓️ Com’è fatto il piano</h3><div class="rt">' +
+    '<div class="b">Fino al 30 dicembre: la teoria di Meccanica razionale, Topografia e Fisica 2, con gli esercizi principali. Ogni giorno pieno ha 2 materie (mattina e pomeriggio), a rotazione.</div>' +
+    '<div class="b">Prima sempre la <b>teoria</b>, poi gli <b>esercizi</b> dello stesso argomento.</div>' +
+    '<div class="b">I sabati 5, 12 e 19 dicembre sono per i <b>recuperi</b>. Le domeniche e i giorni fuori casa sono liberi.</div>' +
+    '<div class="b">A gennaio: simulazioni d’esame e ripasso prima di ogni appello (le date le controlla Claude lunedì, mercoledì e venerdì e ti avvisa appena escono).</div>' +
+    '<div class="b">Chimica dopo gli esami di gennaio, per l’appello di febbraio.</div>' +
+    '</div></div>';
+  h += '<div class="card"><h3>⏰ Messaggi automatici di Claude</h3>' + [
+    ['6:41 lun–gio e sab','Piano del giorno + lezione di Analisi 1'],
+    ['7:00 ogni giorno','Briefing geopolitica e mercati (lo leggi da gennaio)'],
+    ['7:27 ogni giorno','Lezione di finanza (la leggi dopo cena)'],
+    ['19:13 lun, mer, ven','Controllo delle date degli appelli'],
+    ['Domenica sera','Backup di VF su Google Drive']
+  ].map(([t,x]) => '<div class="st-pause"><span class="tm" style="min-width:118px">'+t+'</span><span>'+x+'</span></div>').join('') + '</div>';
+  return h;
+}
+
+function renderStMat(){
+  const all = Object.entries(S.c.studio_materiali || {}).map(([id,x]) => Object.assign({id}, x)).sort((a,b) => (a.materia || '').localeCompare(b.materia || '') || (a.ordine || 0) - (b.ordine || 0));
+  let h = '<div class="card"><h3>📎 Materiali preparati da Claude</h3><div class="help" style="margin:0">Qui trovi le <b>spiegazioni complete di Topografia</b> (una per blocco di slide), le schede procedura e le domande di teoria. Claude le aggiunge qualche giorno prima di quando ti servono. Tienile aperte insieme alle slide del prof.</div></div>';
+  if (!all.length) return h + '<div class="card"><div class="empty">Ancora nessun materiale. La prima spiegazione (Topografia, blocco 01) arriva prima di martedì 24.</div></div>';
+  let cur = null;
+  all.forEach(x => {
+    if (x.materia !== cur){ if (cur !== null) h += '</div>'; cur = x.materia; h += '<div class="sec-t">'+esc(cur || 'Altro')+'</div><div class="card st-wk">'; }
+    const open = S.stMatOpen === x.id;
+    h += '<div class="st-dub"><button class="bigb" data-a="stMat" data-id="'+esc(x.id)+'"><span>'+esc(x.titolo || x.id)+(x.per ? '<small style="display:block;font-weight:600;color:var(--muted);font-size:12px">Per il '+esc(fmt(x.per,{weekday:'long', day:'numeric', month:'short'}))+'</small>' : '')+'</span>'+(open ? I.up : I.chev)+'</button>'+(open ? '<div style="margin-top:12px">'+stMd(x.testo || '')+'</div>' : '')+'</div>';
+  });
+  if (cur !== null) h += '</div>';
+  return h;
+}
+function renderStDubbi(){
+  const all = Object.entries(S.c.studio_dubbi || {}).map(([id,x]) => Object.assign({id}, x)).sort((a,b) => (b.data || '').localeCompare(a.data || ''));
+  const open = all.filter(x => x.stato !== 'chiuso'), closed = all.filter(x => x.stato === 'chiuso');
+  let h = '<div class="card"><h3>❓ Come funzionano i dubbi</h3><div class="help" style="margin:0">Scrivi “? materia, cosa non capisci” nella chat del progetto Studio. Claude lo salva qui da solo: se si spiega in pochi minuti te lo spiega subito, altrimenti lo mette nel piano del giorno dopo.</div></div>';
+  h += '<div class="sec-t">Aperti ('+open.length+')</div><div class="card">' + (open.length ? open.map(x => '<div class="st-dub"><div class="st-bt">'+(x.materia ? stTag(x.materia) : '')+'<span class="tm">'+esc(x.data ? fmt(x.data,{day:'numeric', month:'short'}) : '')+'</span></div><div class="st-cosa">'+esc(x.testo || '')+'</div>'+(x.pianificato_per ? '<div class="st-str">Nel piano del '+esc(fmt(x.pianificato_per,{weekday:'long', day:'numeric', month:'short'}))+'</div>' : '')+'</div>').join('') : '<div class="empty">Nessun dubbio aperto 👌</div>') + '</div>';
+  if (closed.length) h += '<div class="sec-t">Risolti ('+closed.length+')</div><div class="card">' + closed.map(x => '<button class="st-dub cl" data-a="stDub" data-id="'+esc(x.id)+'"><div class="st-bt">'+(x.materia ? stTag(x.materia) : '')+'<span class="tm">'+esc(x.data ? fmt(x.data,{day:'numeric', month:'short'}) : '')+'</span><span class="st-k">✓ risolto</span></div><div class="st-cosa">'+esc(x.testo || '')+'</div>'+(S.stDubOpen === x.id && x.spiegazione ? '<div class="st-come" style="text-align:left">'+stMd(x.spiegazione)+'</div>' : (x.spiegazione ? '<div class="st-str">Tocca per rileggere la spiegazione</div>' : ''))+'</button>').join('') + '</div>';
+  const reps = Object.entries(S.c.studio_giorni || {}).filter(([d,x]) => x.report).sort((a,b) => b[0].localeCompare(a[0]));
+  h += '<div class="sec-t">I tuoi report</div><div class="card">' + (reps.length ? reps.map(([d,x]) => { const r = typeof x.report === 'string' ? x.report : (x.report.testo || ''); return '<div class="st-dub"><div class="st-bt"><span class="tm">'+esc(cap(fmt(d,{weekday:'long', day:'numeric', month:'short'})))+'</span></div><div class="st-cosa">'+esc(r)+'</div>'+(x.report.feedback ? '<div class="st-str"><b>Claude:</b> '+esc(x.report.feedback)+'</div>' : '')+'</div>'; }).join('') : '<div class="empty">Ancora nessun report. Il primo alle 17:30 del primo giorno di studio.</div>') + '</div>';
+  return h;
+}
+function stToggle(i){
+  const d = S.stDate; const day = stDay(d); if (!day) return;
+  const real = Object.assign({}, (S.c.studio_giorni || {})[d] || {});
+  let bl = (real.blocchi && real.blocchi.length) ? real.blocchi.map(b => Object.assign({}, b)) : (day.blocchi || []).map(b => { const c = Object.assign({}, b); delete c._i; return c; });
+  if (!bl[i]) return;
+  bl[i].done = !bl[i].done;
+  if (!real.data) real.data = d;
+  if (!real.obiettivo_minimo && day.obiettivo_minimo) real.obiettivo_minimo = day.obiettivo_minimo;
+  if (!real.nota && day.nota) real.nota = day.nota;
+  real.blocchi = bl;
+  put('studio_giorni/'+d, real);
+  render(true);
 }
 
 /* ---------- mete ---------- */
@@ -1212,6 +1534,15 @@ const A = {
   toggleBottom(){ S.bottom = !S.bottom; render(true); },
   nav(el){ const v = el.dataset.v; if (v === 'mete'){ S.mete = true; S.meteAnim = true; } else { S.mete = false; S.view = v; S.editPage = null; S.folder = v === 'note' ? S.folder : null; } if (v !== 'tempo') S.side = false; render(true); },
   closeMete(){ S.mete = false; render(true); },
+  stTab(el){ S.stTab = el.dataset.t; S.view = 'studio'; S.mete = false; render(true); const m = $('main'); if (m) m.scrollTop = 0; },
+  stPrev(){ S.stDate = addDays(S.stDate || today(), -1); S.stLez = false; render(true); },
+  stNext(){ S.stDate = addDays(S.stDate || today(), 1); S.stLez = false; render(true); },
+  stToday(){ S.stDate = today(); S.stLez = false; render(true); },
+  stOpen(el){ S.stDate = el.dataset.d; S.stTab = 'oggi'; S.stLez = false; render(true); const m = $('main'); if (m) m.scrollTop = 0; },
+  stChk(el){ stToggle(+el.dataset.i); },
+  stLez(){ S.stLez = !S.stLez; render(true); },
+  stMat(el){ S.stMatOpen = S.stMatOpen === el.dataset.id ? null : el.dataset.id; render(true); },
+  stDub(el){ S.stDubOpen = S.stDubOpen === el.dataset.id ? null : el.dataset.id; render(true); },
   settings(){ openSheet({type:'settings'}); },
   tab(el){ S.tab = el.dataset.t; S.sideTop = true; lsSet('tab', S.tab); render(true); },
   calPrev(){ const [y,m] = S.month.split('-').map(Number); S.month = ym(ymd(new Date(y, m-2, 1))); render(true); },

@@ -1061,7 +1061,7 @@ function stMd(t){
     if (/^#{1,6}\s/.test(s)){ const n = s.match(/^#+/)[0].length; h += '<div class="st-h'+Math.min(n,3)+'">'+inl(s.replace(/^#+\s*/,''))+'</div>'; }
     else if (/^\s*[-*•]\s+/.test(s)) h += '<div class="st-li">'+inl(s.replace(/^\s*[-*•]\s+/,''))+'</div>';
     else if (/^\s*\d+[.)]\s+/.test(s)) h += '<div class="st-li n"><b>'+s.trim().match(/^\d+/)[0]+'.</b> '+inl(s.replace(/^\s*\d+[.)]\s+/,''))+'</div>';
-    else if (/^>\s?/.test(s)) h += '<div class="st-q">'+inl(s.replace(/^>\s?/,''))+'</div>';
+    else if (/^\s*>\s?/.test(s)) h += '<div class="st-q">'+inl(s.replace(/^\s*>\s?/,''))+'</div>';
     else if (/^---+$/.test(s.trim())) h += '<hr>';
     else if (!s.trim()) h += '<div class="gap"></div>';
     else h += '<div>'+inl(s)+'</div>';

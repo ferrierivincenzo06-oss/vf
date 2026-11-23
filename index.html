@@ -1124,12 +1124,24 @@ function renderStOggi(){
   if (dub.length) h += '<div class="card"><h3>❓ Dubbi aperti ('+dub.length+')<span class="sub"><button class="mini" data-a="stTab" data-t="dubbi">Vedi</button></span></h3><div class="help" style="margin:0">Claude li mette nel piano del giorno dopo (15 minuti ciascuno).</div></div>';
   return h + stProgressCard();
 }
+const ST_AN_TOT = 23;
+function stAnalisiDone(){
+  // lezioni di Analisi 1 fatte: giorni con un blocco "Analisi 1" spuntato (una lezione per numero)
+  const got = new Set();
+  Object.entries(S.c.studio_giorni || {}).forEach(([d, g]) => {
+    if (!g || !(g.blocchi || []).some(b => b && b.materia === 'Analisi 1' && b.done)) return;
+    got.add(String((g.lezione_analisi || {}).numero || d));
+  });
+  return Math.min(got.size, ST_AN_TOT);
+}
 function stProgressCard(){
   const r = stDoneAll();
   let h = '<div class="sec-t">Avanzamento fino al 30 dicembre</div><div class="card">';
   ST_MAT.forEach(m => { const x = r[m]; const p = x.tot ? Math.round(x.done/x.tot*100) : 0;
     h += '<div class="st-pr"><div class="st-prh">'+stTag(m)+'<span>'+x.done+' / '+x.tot+' blocchi · '+p+'%</span></div><div class="prog"><i style="width:'+p+'%;background:'+ST_COL[m]+'"></i></div></div>'; });
-  h += '<div class="help">Un blocco conta come fatto quando lo spunti qui o quando lo segna Claude dal tuo report.</div></div>';
+  const an = stAnalisiDone(); const ap = Math.round(an/ST_AN_TOT*100);
+  h += '<div class="st-pr"><div class="st-prh">'+stTag('Analisi 1')+'<span>'+an+' / '+ST_AN_TOT+' lezioni · '+ap+'%</span></div><div class="prog"><i style="width:'+ap+'%;background:'+ST_COL['Analisi 1']+'"></i></div></div>';
+  h += '<div class="help">Un blocco conta come fatto quando lo spunti qui o quando lo segna Claude dal tuo report. Per Analisi 1 conta le lezioni con il blocco “Analisi 1” spuntato.</div></div>';
   return h;
 }
 
